@@ -1,5 +1,10 @@
 from fastapi import FastAPI
-from app.api.documents import router
+from app.api.router import api_router
 
-app = FastAPI()
-app.include_router(router)
+app = FastAPI(title="SmartKeep API")
+
+app.include_router(api_router)
+
+@app.get("/")
+def root():
+    return {"message": "SmartKeep API Running"}

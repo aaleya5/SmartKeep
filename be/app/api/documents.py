@@ -1,9 +1,10 @@
-from fastapi import APIRouter
-from app.schemas.document import DocumentCreate
-from app.services.document_service import save_document
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.db.session import get_db
+from app.models.document import Document
 
-router = APIRouter()
+router = APIRouter(prefix="/documents", tags=["Documents"])
 
-@router.post("/documents")
-def create_document(doc: DocumentCreate):
-    return save_document(doc.title, doc.raw_text)
+@router.get("/")
+def get_all_documents(db: Session = Depends(get_db)):
+    return db.query(Document).all()
