@@ -7,3 +7,6 @@ beautifulsoup4
 requests
 python-dotenv
 pydantic-settings
+rank-bm25 
+nltk
+scikit-learn
