@@ -3,10 +3,11 @@ uvicorn
 sqlalchemy
 psycopg2-binary
 pydantic
+pydantic-settings
 beautifulsoup4
 requests
 python-dotenv
-pydantic-settings
-rank-bm25 
+rank-bm25
 nltk
 scikit-learn
+alembic
