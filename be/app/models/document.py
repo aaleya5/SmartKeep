@@ -9,5 +9,6 @@ class Document(Base):
     title = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     source_url = Column(String, nullable=True)
-    domain = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    domain = Column(String, nullable=True, index=True)  # Added index
+    tags = Column(String, nullable=True)  # Comma-separated tags
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)  # Added index

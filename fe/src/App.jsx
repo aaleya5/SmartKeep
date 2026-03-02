@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { documentAPI, contentAPI, searchAPI } from './services/api';
+import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
 function App() {
@@ -8,7 +9,9 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchModel, setSearchModel] = useState('bm25');
+  const [searchLatency, setSearchLatency] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   
   // Form states
   const [urlInput, setUrlInput] = useState('');
@@ -23,12 +26,15 @@ function App() {
   }, []);
 
   const fetchDocuments = async () => {
+    setIsLoading(true);
     try {
       const response = await documentAPI.getAll();
       setDocuments(response.data);
     } catch (err) {
       console.error(err);
       setError('Failed to fetch documents');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -45,7 +51,8 @@ function App() {
       fetchDocuments();
       setActiveTab('documents');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to fetch URL content');
+      const errorMsg = err.response?.data?.detail || err.response?.data?.message || 'Failed to fetch URL content';
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -64,8 +71,9 @@ function App() {
       setManualContent('');
       fetchDocuments();
       setActiveTab('documents');
-    } catch {
-      setError('Failed to create document');
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || 'Failed to create document';
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -77,12 +85,14 @@ function App() {
     
     setIsSearching(true);
     setError(null);
+    setHasSearched(true);
     
     try {
       const response = await searchAPI.search(searchQuery, searchModel);
       setSearchResults(response.data.results || []);
+      setSearchLatency(response.data.latency_ms);
     } catch (err) {
-      setError('Search failed');
+      setError('Search failed: ' + (err.response?.data?.detail || err.message));
       console.error(err);
     } finally {
       setIsSearching(false);
@@ -95,189 +105,220 @@ function App() {
   };
 
   return (
-    <div className="app">
-      <header className="header">
-        <h1>SmartKeep</h1>
-        <p className="subtitle">Your Personal Knowledge Management System</p>
-      </header>
+    <ErrorBoundary>
+      <div className="app">
+        <header className="header">
+          <h1>SmartKeep</h1>
+          <p className="subtitle">Your Personal Knowledge Management System</p>
+        </header>
 
-      <nav className="nav-tabs">
-        <button 
-          className={`tab ${activeTab === 'documents' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('documents'); clearMessages(); }}
-        >
-          Documents
-        </button>
-        <button 
-          className={`tab ${activeTab === 'add' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('add'); clearMessages(); }}
-        >
-          Add Content
-        </button>
-        <button 
-          className={`tab ${activeTab === 'search' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('search'); clearMessages(); }}
-        >
-          Search
-        </button>
-      </nav>
+        <nav className="nav-tabs">
+          <button 
+            className={`tab ${activeTab === 'documents' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('documents'); clearMessages(); }}
+          >
+            Documents
+          </button>
+          <button 
+            className={`tab ${activeTab === 'add' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('add'); clearMessages(); }}
+          >
+            Add Content
+          </button>
+          <button 
+            className={`tab ${activeTab === 'search' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('search'); clearMessages(); }}
+          >
+            Search
+          </button>
+        </nav>
 
-      <main className="main-content">
-        {error && (
-          <div className="alert error">
-            {error}
-            <button onClick={() => setError(null)} className="close-btn">×</button>
-          </div>
-        )}
-        
-        {successMessage && (
-          <div className="alert success">
-            {successMessage}
-            <button onClick={() => setSuccessMessage(null)} className="close-btn">×</button>
-          </div>
-        )}
+        <main className="main-content">
+          {error && (
+            <div className="alert error">
+              {error}
+              <button onClick={() => setError(null)} className="close-btn">×</button>
+            </div>
+          )}
+          
+          {successMessage && (
+            <div className="alert success">
+              {successMessage}
+              <button onClick={() => setSuccessMessage(null)} className="close-btn">×</button>
+            </div>
+          )}
 
-        {activeTab === 'documents' && (
-          <div className="documents-view">
-            <h2>Your Documents</h2>
-            {documents.length === 0 ? (
-              <div className="empty-state">
-                <p>No documents yet.</p>
-                <button onClick={() => setActiveTab('add')} className="btn primary">
-                  Add your first document
-                </button>
-              </div>
-            ) : (
-              <div className="documents-grid">
-                {documents.map((doc) => (
-                  <div key={doc.id} className="document-card">
-                    <h3>{doc.title}</h3>
-                    <p className="document-content">
-                      {doc.content.length > 150 
-                        ? doc.content.substring(0, 150) + '...' 
-                        : doc.content}
-                    </p>
-                    <div className="document-meta">
-                      {doc.domain && <span className="domain">{doc.domain}</span>}
-                      {doc.source_url && (
-                        <a href={doc.source_url} target="_blank" rel="noopener noreferrer" className="source-link">
-                          View Source
-                        </a>
-                      )}
+          {activeTab === 'documents' && (
+            <div className="documents-view">
+              <h2>Your Documents</h2>
+              {isLoading && (
+                <div className="loading-indicator">
+                  <div className="spinner"></div>
+                  <span>Loading documents...</span>
+                </div>
+              )}
+              {documents.length === 0 && !isLoading ? (
+                <div className="empty-state">
+                  <p>No documents yet.</p>
+                  <button onClick={() => setActiveTab('add')} className="btn primary">
+                    Add your first document
+                  </button>
+                </div>
+              ) : (
+                <div className="documents-grid">
+                  {documents.map((doc) => (
+                    <div key={doc.id} className="document-card">
+                      <h3>{doc.title}</h3>
+                      <p className="document-content">
+                        {doc.content.length > 150 
+                          ? doc.content.substring(0, 150) + '...' 
+                          : doc.content}
+                      </p>
+                      <div className="document-meta">
+                        {doc.domain && <span className="domain">{doc.domain}</span>}
+                        {doc.source_url && (
+                          <a href={doc.source_url} target="_blank" rel="noopener noreferrer" className="source-link">
+                            View Source
+                          </a>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-        {activeTab === 'add' && (
-          <div className="add-content-view">
-            <h2>Add New Content</h2>
-            
-            <div className="add-options">
-              <div className="add-option">
-                <h3>From URL</h3>
-                <form onSubmit={handleURLSubmit}>
-                  <div className="form-group">
-                    <label htmlFor="url">Enter URL:</label>
-                    <input
-                      type="url"
-                      id="url"
-                      value={urlInput}
-                      onChange={(e) => setUrlInput(e.target.value)}
-                      placeholder="https://example.com/article"
-                      required
-                    />
-                  </div>
-                  <button type="submit" className="btn primary" disabled={isLoading}>
-                    {isLoading ? 'Fetching...' : 'Fetch Content'}
-                  </button>
-                </form>
-              </div>
+          {activeTab === 'add' && (
+            <div className="add-content-view">
+              <h2>Add New Content</h2>
+              
+              <div className="add-options">
+                <div className="add-option">
+                  <h3>From URL</h3>
+                  <form onSubmit={handleURLSubmit}>
+                    <div className="form-group">
+                      <label htmlFor="url">Enter URL:</label>
+                      <input
+                        type="url"
+                        id="url"
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        placeholder="https://example.com/article"
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <button type="submit" className="btn primary" disabled={isLoading}>
+                      {isLoading ? <><span className="spinner-small"></span> Fetching...</> : 'Fetch Content'}
+                    </button>
+                  </form>
+                </div>
 
-              <div className="divider">OR</div>
+                <div className="divider">OR</div>
 
-              <div className="add-option">
-                <h3>Manual Entry</h3>
-                <form onSubmit={handleManualSubmit}>
-                  <div className="form-group">
-                    <label htmlFor="title">Title:</label>
-                    <input
-                      type="text"
-                      id="title"
-                      value={manualTitle}
-                      onChange={(e) => setManualTitle(e.target.value)}
-                      placeholder="Enter document title"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="content">Content:</label>
-                    <textarea
-                      id="content"
-                      value={manualContent}
-                      onChange={(e) => setManualContent(e.target.value)}
-                      placeholder="Enter document content..."
-                      rows={6}
-                      required
-                    />
-                  </div>
-                  <button type="submit" className="btn primary" disabled={isLoading}>
-                    {isLoading ? 'Saving...' : 'Save Document'}
-                  </button>
-                </form>
+                <div className="add-option">
+                  <h3>Manual Entry</h3>
+                  <form onSubmit={handleManualSubmit}>
+                    <div className="form-group">
+                      <label htmlFor="title">Title:</label>
+                      <input
+                        type="text"
+                        id="title"
+                        value={manualTitle}
+                        onChange={(e) => setManualTitle(e.target.value)}
+                        placeholder="Enter document title"
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="content">Content:</label>
+                      <textarea
+                        id="content"
+                        value={manualContent}
+                        onChange={(e) => setManualContent(e.target.value)}
+                        placeholder="Enter document content..."
+                        rows={6}
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <button type="submit" className="btn primary" disabled={isLoading}>
+                      {isLoading ? <><span className="spinner-small"></span> Saving...</> : 'Save Document'}
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {activeTab === 'search' && (
-          <div className="search-view">
-            <h2>Search Documents</h2>
-            
-            <form onSubmit={handleSearch} className="search-form">
-              <div className="search-input-group">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Enter search query..."
-                  className="search-input"
-                />
-                <select 
-                  value={searchModel} 
-                  onChange={(e) => setSearchModel(e.target.value)}
-                  className="model-select"
-                >
-                  <option value="bm25">BM25</option>
-                  <option value="tfidf">TF-IDF</option>
-                </select>
-                <button type="submit" className="btn primary" disabled={isSearching}>
-                  {isSearching ? 'Searching...' : 'Search'}
-                </button>
-              </div>
-            </form>
+          {activeTab === 'search' && (
+            <div className="search-view">
+              <h2>Search Documents</h2>
+              
+              <form onSubmit={handleSearch} className="search-form">
+                <div className="search-input-group">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Enter search query..."
+                    className="search-input"
+                    disabled={isSearching}
+                  />
+                  <select 
+                    value={searchModel} 
+                    onChange={(e) => setSearchModel(e.target.value)}
+                    className="model-select"
+                    disabled={isSearching}
+                  >
+                    <option value="bm25">BM25</option>
+                    <option value="tfidf">TF-IDF</option>
+                  </select>
+                  <button type="submit" className="btn primary" disabled={isSearching}>
+                    {isSearching ? <><span className="spinner-small"></span> Searching...</> : 'Search'}
+                  </button>
+                </div>
+              </form>
 
-            {searchResults.length > 0 && (
-              <div className="search-results">
-                <h3>Results ({searchResults.length})</h3>
-                {searchResults.map((result, index) => (
-                  <div key={index} className="result-card">
-                    <div className="result-header">
-                      <h4>{result.title}</h4>
-                      <span className="result-score">Score: {result.score?.toFixed(4)}</span>
+              {/* Search Performance Info */}
+              {searchLatency !== null && (
+                <div className="search-meta">
+                  <span className={`latency ${searchLatency < 500 ? 'fast' : 'slow'}`}>
+                    ⚡ Search completed in {searchLatency.toFixed(2)}ms
+                  </span>
+                </div>
+              )}
+
+              {/* Search Results */}
+              {hasSearched && searchResults.length > 0 && (
+                <div className="search-results">
+                  <h3>Results ({searchResults.length})</h3>
+                  {searchResults.map((result, index) => (
+                    <div key={index} className="result-card">
+                      <div className="result-header">
+                        <h4>{result.title}</h4>
+                        <span className="result-score">Score: {result.score?.toFixed(4)}</span>
+                      </div>
+                      <p className="result-content">{result.content}</p>
                     </div>
-                    <p className="result-content">{result.content}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </main>
-    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Empty State - No Results */}
+              {hasSearched && searchResults.length === 0 && !isSearching && !error && (
+                <div className="empty-state search-empty">
+                  <p>No documents found matching your search.</p>
+                  <p className="empty-hint">Try different keywords or add more documents.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+    </ErrorBoundary>
   );
 }
 

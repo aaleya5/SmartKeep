@@ -35,12 +35,17 @@ class SearchIndexCache:
             self._documents = documents
             self._last_build_time = current_time
             
-            # Build both indexes
-            self._bm25_engine = BM25Engine()
-            self._bm25_engine.build_index(documents)
-            
-            self._tfidf_engine = TfidfEngine()
-            self._tfidf_engine.build_index(documents)
+            # Build both indexes only if there are documents
+            if documents:
+                self._bm25_engine = BM25Engine()
+                self._bm25_engine.build_index(documents)
+                
+                self._tfidf_engine = TfidfEngine()
+                self._tfidf_engine.build_index(documents)
+            else:
+                # Clear indexes when no documents
+                self._bm25_engine = None
+                self._tfidf_engine = None
         
         if model == "bm25":
             return self._bm25_engine, self._documents

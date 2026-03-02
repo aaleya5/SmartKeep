@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.document import Document
+from app.schemas.document import DocumentResponse
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
-@router.get("/")
+@router.get("/", response_model=list[DocumentResponse])
 def get_all_documents(db: Session = Depends(get_db)):
     return db.query(Document).all()
