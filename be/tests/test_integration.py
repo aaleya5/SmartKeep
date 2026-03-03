@@ -82,7 +82,7 @@ class TestSaveAndSearch:
                 "content": "Python is a high-level programming language. It is great for beginners."
             }
         )
-        assert response.status_code == 200
+        assert response.status_code == 201
         doc_data = response.json()
         assert doc_data["title"] == "Python Programming Guide"
         doc_id = doc_data["id"]
@@ -132,7 +132,7 @@ class TestDuplicateURL:
                 "content": "Test content for duplicate URL test"
             }
         )
-        assert response.status_code == 200
+        assert response.status_code == 201
         
         # Now try to save with a fake URL that would be considered duplicate
         # Since we can't reliably scrape URLs in tests, we'll test the error handling
@@ -224,7 +224,7 @@ class TestContentLength:
             }
         )
         
-        assert response.status_code == 200
+        assert response.status_code == 201
         data = response.json()
         
         # Content should be truncated

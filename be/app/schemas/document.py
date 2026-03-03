@@ -17,6 +17,7 @@ class DocumentResponse(BaseModel):
     source_url: str | None
     domain: str | None
     tags: str | None
+    is_truncated: bool = False
     created_at: datetime | None
     
     @field_serializer('created_at')

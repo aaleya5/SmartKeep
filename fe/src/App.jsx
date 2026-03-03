@@ -275,6 +275,7 @@ function App() {
                   >
                     <option value="bm25">BM25</option>
                     <option value="tfidf">TF-IDF</option>
+                    <option value="fts">PostgreSQL FTS</option>
                   </select>
                   <button type="submit" className="btn primary" disabled={isSearching}>
                     {isSearching ? <><span className="spinner-small"></span> Searching...</> : 'Search'}
