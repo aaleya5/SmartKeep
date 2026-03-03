@@ -32,8 +32,13 @@ def upgrade() -> None:
     # type: () -> None
     """Add pgvector extension and AI-related columns."""
     
-    # Enable pgvector extension (PostgreSQL only)
-    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    # Try to enable pgvector extension (PostgreSQL only)
+    # Note: This may fail if pgvector is not installed on the PostgreSQL server
+    try:
+        op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    except Exception:
+        # pgvector not available - continue without it, embeddings will use text storage
+        pass
     
     # Add embedding column with vector type (384 dimensions for all-MiniLM-L6-v2)
     # Using text type as fallback for SQLAlchemy compatibility

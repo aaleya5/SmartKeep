@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, Index, Boolean, 
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.types import TypeDecorator, TEXT
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.db.base import Base
 
 
@@ -66,4 +67,13 @@ class Document(Base):
         Index('ix_documents_search_vector_gin', 'search_vector', postgresql_using='gin'),
         # Index for enrichment status filtering
         Index('ix_documents_enrichment_status', 'enrichment_status'),
+    )
+
+    # Relationship to content_collections (join table)
+    # Using string reference to avoid circular import
+    content_collections = relationship(
+        "ContentCollection",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        lazy="dynamic"
     )

@@ -21,6 +21,22 @@ export const contentAPI = {
   enrich: (id) => apiClient.post(`/content/${id}/enrich`),
 };
 
+// Collections APIs
+export const collectionAPI = {
+  create: (name, description, color) => 
+    apiClient.post('/collections', { name, description, color }),
+  getAll: () => apiClient.get('/collections'),
+  get: (id) => apiClient.get(`/collections/${id}`),
+  update: (id, data) => apiClient.put(`/collections/${id}`, data),
+  delete: (id) => apiClient.delete(`/collections/${id}`),
+  addDocument: (collectionId, documentId) => 
+    apiClient.post(`/collections/${collectionId}/content/${documentId}`),
+  removeDocument: (collectionId, documentId) => 
+    apiClient.delete(`/collections/${collectionId}/content/${documentId}`),
+  getForDocument: (documentId) => 
+    apiClient.get(`/collections/document/${documentId}`),
+};
+
 // Search APIs
 export const searchAPI = {
   search: (query, model = 'bm25', topK = 5) => 

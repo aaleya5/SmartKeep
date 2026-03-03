@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { documentAPI, contentAPI, searchAPI } from './services/api';
+import { documentAPI, contentAPI, searchAPI, collectionAPI } from './services/api';
 import ErrorBoundary from './components/ErrorBoundary';
+import CollectionsSidebar from './components/CollectionsSidebar';
+import AddToCollectionModal from './components/AddToCollectionModal';
 import './App.css';
 
 function App() {
@@ -12,6 +14,13 @@ function App() {
   const [searchLatency, setSearchLatency] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  
+  // Collections state
+  const [collections, setCollections] = useState([]);
+  const [selectedCollection, setSelectedCollection] = useState(null);
+  const [collectionRefreshTrigger, setCollectionRefreshTrigger] = useState(0);
+  const [showAddToCollection, setShowAddToCollection] = useState(false);
+  const [selectedDocumentForCollection, setSelectedDocumentForCollection] = useState(null);
   
   // Form states
   const [urlInput, setUrlInput] = useState('');
@@ -25,17 +34,35 @@ function App() {
     fetchDocuments();
   }, []);
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = async (collectionId = null) => {
     setIsLoading(true);
     try {
-      const response = await documentAPI.getAll();
-      setDocuments(response.data);
+      let response;
+      if (collectionId) {
+        // Fetch documents for specific collection
+        response = await collectionAPI.get(collectionId);
+        setDocuments(response.data.documents || []);
+      } else {
+        // Fetch all documents
+        response = await documentAPI.getAll();
+        setDocuments(response.data);
+      }
     } catch (err) {
       console.error(err);
       setError('Failed to fetch documents');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCollectionSelect = (collectionId) => {
+    setSelectedCollection(collectionId);
+    fetchDocuments(collectionId);
+  };
+
+  const handleAddToCollection = (docId) => {
+    setSelectedDocumentForCollection(docId);
+    setShowAddToCollection(true);
   };
 
   const handleURLSubmit = async (e) => {
@@ -196,78 +223,96 @@ function App() {
 
           {activeTab === 'documents' && (
             <div className="documents-view">
-              <h2>Your Documents</h2>
-              {isLoading && (
-                <div className="loading-indicator">
-                  <div className="spinner"></div>
-                  <span>Loading documents...</span>
-                </div>
-              )}
-              {documents.length === 0 && !isLoading ? (
-                <div className="empty-state">
-                  <p>No documents yet.</p>
-                  <button onClick={() => setActiveTab('add')} className="btn primary">
-                    Add your first document
-                  </button>
-                </div>
-              ) : (
-                <div className="documents-grid">
-                  {documents.map((doc) => (
-                    <div key={doc.id} className="document-card">
-                      <h3>{doc.title}</h3>
-                      
-                      {/* AI Enrichment Info */}
-                      <div className="document-ai-info">
-                        {getEnrichmentStatus(doc.enrichment_status)}
-                        {doc.reading_time && (
-                          <span className="reading-time">📖 {getReadingTime(doc.reading_time)}</span>
-                        )}
-                        {doc.difficulty_score && getDifficultyBadge(doc.difficulty_score)}
-                      </div>
-                      
-                      {/* Summary (if available) */}
-                      {doc.summary && (
-                        <p className="document-summary">
-                          <strong>Summary:</strong> {doc.summary}
-                        </p>
-                      )}
-                      
-                      <p className="document-content">
-                        {doc.content.length > 150 
-                          ? doc.content.substring(0, 150) + '...' 
-                          : doc.content}
-                      </p>
-                      
-                      {/* Suggested Tags */}
-                      {doc.suggested_tags && doc.suggested_tags.length > 0 && (
-                        <div className="suggested-tags">
-                          <strong>Suggested tags:</strong> 
-                          {doc.suggested_tags.map((tag, idx) => (
-                            <span key={idx} className="tag">{tag}</span>
-                          ))}
-                        </div>
-                      )}
-                      
-                      <div className="document-meta">
-                        {doc.domain && <span className="domain">{doc.domain}</span>}
-                        {doc.source_url && (
-                          <a href={doc.source_url} target="_blank" rel="noopener noreferrer" className="source-link">
-                            View Source
-                          </a>
-                        )}
-                        {doc.enrichment_status === 'failed' || doc.enrichment_status === 'pending' ? (
-                          <button 
-                            className="re-enrich-btn"
-                            onClick={() => handleReEnrich(doc.id)}
-                          >
-                            Re-enrich
-                          </button>
-                        ) : null}
-                      </div>
+              <div className="documents-layout">
+                <CollectionsSidebar 
+                  selectedCollection={selectedCollection}
+                  onSelectCollection={handleCollectionSelect}
+                  refreshTrigger={collectionRefreshTrigger}
+                />
+                <div className="documents-main">
+                  <h2>
+                    {selectedCollection ? 'Collection Documents' : 'All Documents'}
+                  </h2>
+                  {isLoading && (
+                    <div className="loading-indicator">
+                      <div className="spinner"></div>
+                      <span>Loading documents...</span>
                     </div>
-                  ))}
+                  )}
+                  {documents.length === 0 && !isLoading ? (
+                    <div className="empty-state">
+                      <p>No documents yet.</p>
+                      <button onClick={() => setActiveTab('add')} className="btn primary">
+                        Add your first document
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="documents-grid">
+                      {documents.map((doc) => (
+                        <div key={doc.id} className="document-card">
+                          <h3>{doc.title}</h3>
+                          
+                          {/* AI Enrichment Info */}
+                          <div className="document-ai-info">
+                            {getEnrichmentStatus(doc.enrichment_status)}
+                            {doc.reading_time && (
+                              <span className="reading-time">📖 {getReadingTime(doc.reading_time)}</span>
+                            )}
+                            {doc.difficulty_score && getDifficultyBadge(doc.difficulty_score)}
+                          </div>
+                          
+                          {/* Summary (if available) */}
+                          {doc.summary && (
+                            <p className="document-summary">
+                              <strong>Summary:</strong> {doc.summary}
+                            </p>
+                          )}
+                          
+                          <p className="document-content">
+                            {doc.content.length > 150 
+                              ? doc.content.substring(0, 150) + '...' 
+                              : doc.content}
+                          </p>
+                          
+                          {/* Suggested Tags */}
+                          {doc.suggested_tags && doc.suggested_tags.length > 0 && (
+                            <div className="suggested-tags">
+                              <strong>Suggested tags:</strong> 
+                              {doc.suggested_tags.map((tag, idx) => (
+                                <span key={idx} className="tag">{tag}</span>
+                              ))}
+                            </div>
+                          )}
+                          
+                          <div className="document-meta">
+                            {doc.domain && <span className="domain">{doc.domain}</span>}
+                            {doc.source_url && (
+                              <a href={doc.source_url} target="_blank" rel="noopener noreferrer" className="source-link">
+                                View Source
+                              </a>
+                            )}
+                            <button 
+                              className="add-to-collection-btn"
+                              onClick={() => handleAddToCollection(doc.id)}
+                              title="Add to collection"
+                            >
+                              📁
+                            </button>
+                            {doc.enrichment_status === 'failed' || doc.enrichment_status === 'pending' ? (
+                              <button 
+                                className="re-enrich-btn"
+                                onClick={() => handleReEnrich(doc.id)}
+                              >
+                                Re-enrich
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           )}
 
@@ -411,6 +456,21 @@ function App() {
             </div>
           )}
         </main>
+
+        {/* Add to Collection Modal */}
+        <AddToCollectionModal
+          isOpen={showAddToCollection}
+          onClose={() => {
+            setShowAddToCollection(false);
+            setSelectedDocumentForCollection(null);
+          }}
+          documentId={selectedDocumentForCollection}
+          documentTitle={documents.find(d => d.id === selectedDocumentForCollection)?.title}
+          onSuccess={() => {
+            setCollectionRefreshTrigger(prev => prev + 1);
+            fetchDocuments(selectedCollection);
+          }}
+        />
       </div>
     </ErrorBoundary>
   );
