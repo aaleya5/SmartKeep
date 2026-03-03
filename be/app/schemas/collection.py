@@ -16,7 +16,9 @@ class CollectionCreate(BaseModel):
     """Schema for creating a new collection."""
     name: str
     description: Optional[str] = None
-    color: str = "#6366f1"  # Default indigo color
+    color: str = "#6366f1"
+    icon: str = "📁"
+    is_pinned: bool = False
     
     @field_validator('color')
     @classmethod
@@ -35,6 +37,9 @@ class CollectionUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     color: Optional[str] = None
+    icon: Optional[str] = None
+    is_pinned: Optional[bool] = None
+    sort_order: Optional[int] = None
     
     @field_validator('color')
     @classmethod
@@ -55,15 +60,34 @@ class CollectionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     
     id: int
+    uuid: Optional[str] = None
     name: str
     description: Optional[str] = None
     color: str
+    icon: str = "📁"
+    is_pinned: bool = False
+    sort_order: int = 0
     created_at: datetime
-    document_count: int = 0  # Calculated field
+    updated_at: Optional[datetime] = None
+    
+    # Alias for document_count - matches architecture naming
+    @property
+    def item_count(self) -> int:
+        """Get the number of documents in this collection."""
+        return getattr(self, 'document_count', 0)
     
     @field_serializer('created_at')
     @staticmethod
     def serialize_datetime(value: datetime | None) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        return value.isoformat()
+    
+    @field_serializer('updated_at')
+    @staticmethod
+    def serialize_datetime_updated(value: datetime | None) -> str | None:
         if value is None:
             return None
         if isinstance(value, str):
@@ -74,6 +98,7 @@ class CollectionResponse(BaseModel):
 class CollectionWithDocuments(CollectionResponse):
     """Schema for collection with its documents."""
     documents: List["DocumentInCollection"] = []
+    preview_images: List[str] = []
     
     @field_serializer('documents')
     @staticmethod
@@ -102,8 +127,13 @@ class DocumentInCollection(BaseModel):
 
 
 class AddToCollectionRequest(BaseModel):
-    """Schema for adding a document to a collection."""
-    document_id: int
+    """Schema for adding documents to a collection (bulk)."""
+    content_ids: List[int]
+
+
+class CollectionReorderRequest(BaseModel):
+    """Schema for reordering collections."""
+    ordered_ids: List[int]
 
 
 class CollectionListResponse(BaseModel):

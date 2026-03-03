@@ -23,18 +23,49 @@ export const contentAPI = {
 
 // Collections APIs
 export const collectionAPI = {
-  create: (name, description, color) => 
-    apiClient.post('/collections', { name, description, color }),
-  getAll: () => apiClient.get('/collections'),
+  // Create a new collection
+  create: (name, description, color, icon = "📁", isPinned = false) => 
+    apiClient.post('/collections', { 
+      name, 
+      description, 
+      color, 
+      icon,
+      is_pinned: isPinned 
+    }),
+  
+  // Get all collections
+  getAll: (includeEmpty = true, sort = 'newest') => 
+    apiClient.get('/collections', { 
+      params: { 
+        include_empty: includeEmpty, 
+        sort 
+      } 
+    }),
+  
+  // Get a single collection with documents
   get: (id) => apiClient.get(`/collections/${id}`),
+  
+  // Update a collection
   update: (id, data) => apiClient.put(`/collections/${id}`, data),
+  
+  // Delete a collection
   delete: (id) => apiClient.delete(`/collections/${id}`),
-  addDocument: (collectionId, documentId) => 
-    apiClient.post(`/collections/${collectionId}/content/${documentId}`),
+  
+  // Add documents to a collection (bulk)
+  addDocuments: (collectionId, contentIds) => 
+    apiClient.post(`/collections/${collectionId}/content`, { content_ids: contentIds }),
+  
+  // Remove a document from a collection
   removeDocument: (collectionId, documentId) => 
     apiClient.delete(`/collections/${collectionId}/content/${documentId}`),
+  
+  // Get collections for a specific document
   getForDocument: (documentId) => 
     apiClient.get(`/collections/document/${documentId}`),
+  
+  // Reorder collections
+  reorder: (orderedIds) => 
+    apiClient.put('/collections/reorder', { ordered_ids: orderedIds }),
 };
 
 // Search APIs

@@ -15,6 +15,7 @@ function AddToCollectionModal({
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
   const [newCollectionColor, setNewCollectionColor] = useState('#6366f1');
+  const [newCollectionIcon, setNewCollectionIcon] = useState('📁');
   const [selectedCollections, setSelectedCollections] = useState([]);
 
   useEffect(() => {
@@ -27,7 +28,7 @@ function AddToCollectionModal({
   const fetchCollections = async () => {
     setLoading(true);
     try {
-      const response = await collectionAPI.getAll();
+      const response = await collectionAPI.getAll(true, 'manual');
       setCollections(response.data.collections || []);
     } catch (err) {
       setError('Failed to load collections');
@@ -52,12 +53,11 @@ function AddToCollectionModal({
     try {
       if (selectedCollections.includes(collectionId)) {
         // Remove from collection
-        const collection = collections.find(c => c.id === collectionId);
         await collectionAPI.removeDocument(collectionId, documentId);
         setSelectedCollections(prev => prev.filter(id => id !== collectionId));
       } else {
-        // Add to collection
-        await collectionAPI.addDocument(collectionId, documentId);
+        // Add to collection (single document)
+        await collectionAPI.addDocuments(collectionId, [documentId]);
         setSelectedCollections(prev => [...prev, collectionId]);
       }
       if (onSuccess) onSuccess();
@@ -75,16 +75,18 @@ function AddToCollectionModal({
     setSaving(true);
     try {
       // Create the collection
-      const response = await collectionAPI.create(newCollectionName, null, newCollectionColor);
+      const response = await collectionAPI.create(newCollectionName, null, newCollectionColor, newCollectionIcon, false);
       const newCollection = response.data;
       
-      // Add document to the new collection
-      await collectionAPI.addDocument(newCollection.id, documentId);
+      // Add document to the new collection (if documentId is provided)
+      if (documentId) {
+        await collectionAPI.addDocuments(newCollection.id, [documentId]);
+        setSelectedCollections(prev => [...prev, newCollection.id]);
+      }
       
-      // Update state
-      setSelectedCollections(prev => [...prev, newCollection.id]);
       setNewCollectionName('');
       setNewCollectionColor('#6366f1');
+      setNewCollectionIcon('📁');
       setShowCreateForm(false);
       fetchCollections(); // Refresh list
       
@@ -102,6 +104,8 @@ function AddToCollectionModal({
     '#6366f1', '#ec4899', '#10b981', '#f59e0b',
     '#3b82f6', '#8b5cf6', '#ef4444', '#14b8a6',
   ];
+
+  const icons = ['📁', '📚', '⭐', '💡', '🔖', '🏷️', '📌', '🗂️'];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -142,8 +146,9 @@ function AddToCollectionModal({
                         className="collection-color" 
                         style={{ backgroundColor: collection.color }}
                       />
+                      <span className="collection-icon">{collection.icon}</span>
                       <span className="collection-name">{collection.name}</span>
-                      <span className="collection-count">({collection.document_count})</span>
+                      <span className="collection-count">({collection.document_count || collection.item_count || 0})</span>
                     </label>
                   ))
                 )}
@@ -168,6 +173,18 @@ function AddToCollectionModal({
                         style={{ backgroundColor: color }}
                         onClick={() => setNewCollectionColor(color)}
                       />
+                    ))}
+                  </div>
+                  <div className="icon-picker">
+                    {icons.map(icon => (
+                      <button
+                        key={icon}
+                        type="button"
+                        className={`icon-option ${newCollectionIcon === icon ? 'selected' : ''}`}
+                        onClick={() => setNewCollectionIcon(icon)}
+                      >
+                        {icon}
+                      </button>
                     ))}
                   </div>
                   <div className="form-actions">
@@ -228,6 +245,13 @@ function AddToCollectionModal({
         .modal-header h3 {
           margin: 0;
         }
+        .close-btn {
+          background: none;
+          border: none;
+          font-size: 1.5rem;
+          cursor: pointer;
+          color: #6b7280;
+        }
         .modal-body {
           padding: 16px;
         }
@@ -235,6 +259,14 @@ function AddToCollectionModal({
           color: #6b7280;
           font-size: 0.9rem;
           margin-bottom: 16px;
+        }
+        .alert.error {
+          background: #fee2e2;
+          color: #dc2626;
+          padding: 8px 12px;
+          border-radius: 4px;
+          margin-bottom: 12px;
+          font-size: 0.9rem;
         }
         .collections-checklist {
           display: flex;
@@ -262,6 +294,9 @@ function AddToCollectionModal({
           height: 12px;
           border-radius: 3px;
         }
+        .collection-icon {
+          font-size: 1rem;
+        }
         .collection-name {
           flex: 1;
         }
@@ -277,7 +312,13 @@ function AddToCollectionModal({
           flex-direction: column;
           gap: 12px;
         }
-        .color-picker {
+        .create-form input {
+          padding: 8px;
+          border: 1px solid #d1d5db;
+          border-radius: 4px;
+          font-size: 0.9rem;
+        }
+        .color-picker, .icon-picker {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
@@ -292,14 +333,60 @@ function AddToCollectionModal({
         .color-option.selected {
           border-color: #1f2937;
         }
+        .icon-option {
+          width: 28px;
+          height: 28px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          font-size: 1rem;
+          border-radius: 4px;
+        }
+        .icon-option.selected {
+          background: #e5e7eb;
+        }
         .form-actions {
           display: flex;
           gap: 8px;
+        }
+        .btn {
+          padding: 8px 16px;
+          border-radius: 4px;
+          font-size: 0.9rem;
+          cursor: pointer;
+          border: none;
+        }
+        .btn-primary {
+          background: #6366f1;
+          color: white;
+        }
+        .btn-primary:hover {
+          background: #4f46e5;
+        }
+        .btn-primary:disabled {
+          background: #a5b4fc;
+        }
+        .btn-secondary {
+          background: #f3f4f6;
+          color: #374151;
+          border: 1px solid #d1d5db;
+        }
+        .btn-secondary:hover {
+          background: #e5e7eb;
+        }
+        .btn-sm {
+          padding: 6px 12px;
+          font-size: 0.85rem;
         }
         .empty-message {
           color: #9ca3af;
           text-align: center;
           padding: 16px;
+        }
+        .loading {
+          text-align: center;
+          padding: 20px;
+          color: #9ca3af;
         }
       `}</style>
     </div>
