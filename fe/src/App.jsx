@@ -46,7 +46,7 @@ function App() {
     
     try {
       await contentAPI.createFromURL(urlInput);
-      setSuccessMessage('Document created from URL successfully!');
+      setSuccessMessage('Document created from URL successfully! AI enrichment will complete shortly.');
       setUrlInput('');
       fetchDocuments();
       setActiveTab('documents');
@@ -66,7 +66,7 @@ function App() {
     
     try {
       await contentAPI.createManual(manualTitle, manualContent);
-      setSuccessMessage('Document created successfully!');
+      setSuccessMessage('Document created successfully! AI enrichment will complete shortly.');
       setManualTitle('');
       setManualContent('');
       fetchDocuments();
@@ -99,9 +99,55 @@ function App() {
     }
   };
 
+  const handleReEnrich = async (docId) => {
+    try {
+      await contentAPI.enrich(docId);
+      setSuccessMessage('Enrichment triggered! This may take a moment.');
+      fetchDocuments();
+    } catch (err) {
+      setError('Failed to trigger enrichment: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
   const clearMessages = () => {
     setError(null);
     setSuccessMessage(null);
+  };
+
+  const getDifficultyBadge = (score) => {
+    if (score === null || score === undefined) return null;
+    
+    let level, className;
+    if (score >= 60) {
+      level = 'Easy';
+      className = 'badge-easy';
+    } else if (score >= 30) {
+      level = 'Intermediate';
+      className = 'badge-intermediate';
+    } else {
+      level = 'Advanced';
+      className = 'badge-advanced';
+    }
+    
+    return <span className={`difficulty-badge ${className}`}>{level}</span>;
+  };
+
+  const getReadingTime = (minutes) => {
+    if (minutes === null || minutes === undefined) return null;
+    if (minutes < 1) return '< 1 min read';
+    if (minutes === 1) return '1 min read';
+    return `~${Math.round(minutes)} min read`;
+  };
+
+  const getEnrichmentStatus = (status) => {
+    if (status === 'complete') {
+      return <span className="enrichment-status complete">✓ Enriched</span>;
+    } else if (status === 'processing') {
+      return <span className="enrichment-status processing">⏳ Processing...</span>;
+    } else if (status === 'failed') {
+      return <span className="enrichment-status failed">⚠ Failed</span>;
+    }
+    return <span className="enrichment-status pending">⏳ Pending</span>;
   };
 
   return (
@@ -169,11 +215,39 @@ function App() {
                   {documents.map((doc) => (
                     <div key={doc.id} className="document-card">
                       <h3>{doc.title}</h3>
+                      
+                      {/* AI Enrichment Info */}
+                      <div className="document-ai-info">
+                        {getEnrichmentStatus(doc.enrichment_status)}
+                        {doc.reading_time && (
+                          <span className="reading-time">📖 {getReadingTime(doc.reading_time)}</span>
+                        )}
+                        {doc.difficulty_score && getDifficultyBadge(doc.difficulty_score)}
+                      </div>
+                      
+                      {/* Summary (if available) */}
+                      {doc.summary && (
+                        <p className="document-summary">
+                          <strong>Summary:</strong> {doc.summary}
+                        </p>
+                      )}
+                      
                       <p className="document-content">
                         {doc.content.length > 150 
                           ? doc.content.substring(0, 150) + '...' 
                           : doc.content}
                       </p>
+                      
+                      {/* Suggested Tags */}
+                      {doc.suggested_tags && doc.suggested_tags.length > 0 && (
+                        <div className="suggested-tags">
+                          <strong>Suggested tags:</strong> 
+                          {doc.suggested_tags.map((tag, idx) => (
+                            <span key={idx} className="tag">{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                      
                       <div className="document-meta">
                         {doc.domain && <span className="domain">{doc.domain}</span>}
                         {doc.source_url && (
@@ -181,6 +255,14 @@ function App() {
                             View Source
                           </a>
                         )}
+                        {doc.enrichment_status === 'failed' || doc.enrichment_status === 'pending' ? (
+                          <button 
+                            className="re-enrich-btn"
+                            onClick={() => handleReEnrich(doc.id)}
+                          >
+                            Re-enrich
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -213,6 +295,7 @@ function App() {
                       {isLoading ? <><span className="spinner-small"></span> Fetching...</> : 'Fetch Content'}
                     </button>
                   </form>
+                  <p className="form-hint">Content will be automatically enriched with AI summary, tags, and readability analysis.</p>
                 </div>
 
                 <div className="divider">OR</div>
@@ -276,6 +359,8 @@ function App() {
                     <option value="bm25">BM25</option>
                     <option value="tfidf">TF-IDF</option>
                     <option value="fts">PostgreSQL FTS</option>
+                    <option value="semantic">Semantic (AI)</option>
+                    <option value="hybrid">Hybrid (BM25 + Semantic)</option>
                   </select>
                   <button type="submit" className="btn primary" disabled={isSearching}>
                     {isSearching ? <><span className="spinner-small"></span> Searching...</> : 'Search'}
@@ -289,6 +374,7 @@ function App() {
                   <span className={`latency ${searchLatency < 500 ? 'fast' : 'slow'}`}>
                     ⚡ Search completed in {searchLatency.toFixed(2)}ms
                   </span>
+                  <span className="model-badge">{searchModel.toUpperCase()}</span>
                 </div>
               )}
 
@@ -300,9 +386,16 @@ function App() {
                     <div key={index} className="result-card">
                       <div className="result-header">
                         <h4>{result.title}</h4>
-                        <span className="result-score">Score: {result.score?.toFixed(4)}</span>
+                        <span className="result-score">
+                          {result.score !== undefined && `Score: ${result.score.toFixed(4)}`}
+                          {result.similarity_score !== undefined && `Similarity: ${result.similarity_score.toFixed(4)}`}
+                          {result.combined_score !== undefined && `Combined: ${result.combined_score.toFixed(4)}`}
+                        </span>
                       </div>
                       <p className="result-content">{result.content}</p>
+                      {result.summary && (
+                        <p className="result-summary"><strong>Summary:</strong> {result.summary}</p>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -468,3 +468,138 @@ body {
   color: #666;
   margin-bottom: 1.5rem;
 }
+
+/* AI Enrichment Styles */
+.document-ai-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.enrichment-status {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.enrichment-status.complete {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.enrichment-status.processing {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.enrichment-status.failed {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.enrichment-status.pending {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.reading-time {
+  font-size: 0.8rem;
+  color: #666;
+  padding: 0.2rem 0.5rem;
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.difficulty-badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.badge-easy {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.badge-intermediate {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.badge-advanced {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.document-summary {
+  font-size: 0.9rem;
+  color: #4b5563;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  background: #f9fafb;
+  border-radius: 6px;
+  border-left: 3px solid #667eea;
+}
+
+.suggested-tags {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.suggested-tags strong {
+  color: #6b7280;
+  margin-right: 0.5rem;
+}
+
+.suggested-tags .tag {
+  display: inline-block;
+  background: #e0e7ff;
+  color: #667eea;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  margin-right: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.re-enrich-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.re-enrich-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.result-summary {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #f9fafb;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.form-hint {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 0.75rem;
+}
+
+.model-badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: #667eea;
+  color: white;
+  margin-left: 0.5rem;
+}

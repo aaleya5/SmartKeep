@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Index, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, Index, Boolean, Float
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.types import TypeDecorator, TEXT
 from sqlalchemy.sql import func
@@ -37,8 +37,33 @@ class Document(Base):
     # PostgreSQL full-text search vector (tsvector type)
     # Uses custom type that falls back to TEXT for SQLite
     search_vector = Column(SearchVectorType, nullable=True)
+    
+    # ===============================
+    # AI/Semantic Layer Fields
+    # ===============================
+    
+    # Vector embedding for semantic search (384 dimensions for all-MiniLM-L6-v2)
+    embedding = Column(Text, nullable=True)
+    
+    # Enrichment status: pending, complete, failed
+    enrichment_status = Column(String(20), nullable=False, server_default='pending')
+    
+    # Auto-generated summary (2-3 sentences)
+    summary = Column(Text, nullable=True)
+    
+    # AI-suggested tags (JSON array string)
+    suggested_tags = Column(Text, nullable=True)
+    
+    # Estimated reading time in minutes (word_count / 200)
+    reading_time = Column(Float, nullable=True)
+    
+    # Difficulty score (Flesch-Kincaid readability score)
+    # Lower = more difficult, Higher = easier
+    difficulty_score = Column(Float, nullable=True)
 
     __table_args__ = (
         # GIN index for full-text search (PostgreSQL only)
         Index('ix_documents_search_vector_gin', 'search_vector', postgresql_using='gin'),
+        # Index for enrichment status filtering
+        Index('ix_documents_enrichment_status', 'enrichment_status'),
     )

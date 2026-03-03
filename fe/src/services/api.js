@@ -18,12 +18,17 @@ export const documentAPI = {
 export const contentAPI = {
   createFromURL: (url) => apiClient.post('/content/url', { url }),
   createManual: (title, content) => apiClient.post('/content/manual', { title, content }),
+  enrich: (id) => apiClient.post(`/content/${id}/enrich`),
 };
 
 // Search APIs
 export const searchAPI = {
   search: (query, model = 'bm25', topK = 5) => 
     apiClient.get('/search', { params: { query, model, top_k: topK } }),
+  searchSemantic: (query, topK = 10) => 
+    apiClient.get('/search/semantic', { params: { query, top_k: topK } }),
+  searchHybrid: (query, topK = 10, bm25Weight = 0.4) => 
+    apiClient.get('/search/hybrid', { params: { query, top_k: topK, bm25_weight: bm25Weight } }),
   searchTFIDF: (query, topK = 5) => 
     apiClient.get('/search/tfidf', { params: { query, top_k: topK } }),
   benchmark: (query, topK = 5) => 
