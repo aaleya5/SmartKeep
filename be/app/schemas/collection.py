@@ -9,6 +9,7 @@ This module defines request/response schemas for:
 from pydantic import BaseModel, field_serializer, field_validator, ConfigDict
 from datetime import datetime
 from typing import Optional, List
+from uuid import UUID
 import re
 
 
@@ -16,7 +17,7 @@ class CollectionCreate(BaseModel):
     """Schema for creating a new collection."""
     name: str
     description: Optional[str] = None
-    color: str = "#6366f1"
+    color: str = "#1A3A5C"
     icon: str = "📁"
     is_pinned: bool = False
     
@@ -25,10 +26,9 @@ class CollectionCreate(BaseModel):
     def validate_color(cls, v: str) -> str:
         """Validate that color is a valid hex color code."""
         if not v:
-            return '#6366f1'  # Default
-        # Check for valid hex color format (#RRGGBB or #RGB)
+            return '#1A3A5C'
         if not re.match(r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$', v):
-            raise ValueError('Color must be a valid hex color code (e.g., #6366f1 or #FFF)')
+            raise ValueError('Color must be a valid hex color code (e.g., #1A3A5C or #FFF)')
         return v
 
 
@@ -48,10 +48,9 @@ class CollectionUpdate(BaseModel):
         if v is None:
             return v
         if not v:
-            return '#6366f1'  # Default
-        # Check for valid hex color format (#RRGGBB or #RGB)
+            return '#1A3A5C'
         if not re.match(r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$', v):
-            raise ValueError('Color must be a valid hex color code (e.g., #6366f1 or #FFF)')
+            raise ValueError('Color must be a valid hex color code (e.g., #1A3A5C or #FFF)')
         return v
 
 
@@ -59,22 +58,17 @@ class CollectionResponse(BaseModel):
     """Schema for collection responses."""
     model_config = ConfigDict(from_attributes=True)
     
-    id: int
-    uuid: Optional[str] = None
+    id: UUID
     name: str
     description: Optional[str] = None
     color: str
     icon: str = "📁"
     is_pinned: bool = False
     sort_order: int = 0
+    item_count: int = 0
+    preview_images: List[str] = []
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    
-    # Alias for document_count - matches architecture naming
-    @property
-    def item_count(self) -> int:
-        """Get the number of documents in this collection."""
-        return getattr(self, 'document_count', 0)
+    updated_at: datetime
     
     @field_serializer('created_at')
     @staticmethod
@@ -95,55 +89,23 @@ class CollectionResponse(BaseModel):
         return value.isoformat()
 
 
-class CollectionWithDocuments(CollectionResponse):
-    """Schema for collection with its documents."""
-    documents: List["DocumentInCollection"] = []
-    preview_images: List[str] = []
-    
-    @field_serializer('documents')
-    @staticmethod
-    def serialize_documents(value: List) -> List[dict]:
-        return [
-            {
-                "id": doc.id,
-                "title": doc.title,
-                "content": doc.content[:100] + "..." if len(doc.content) > 100 else doc.content,
-                "domain": doc.domain,
-                "added_at": doc.content_collections[0].created_at if hasattr(doc, 'content_collections') and doc.content_collections else None
-            }
-            for doc in value
-        ]
-
-
-class DocumentInCollection(BaseModel):
-    """Schema for document within a collection."""
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
-    title: str
-    content: str
-    domain: Optional[str] = None
-    added_at: Optional[datetime] = None
+class CollectionReorderRequest(BaseModel):
+    """Schema for reordering collections."""
+    ordered_ids: List[UUID]
 
 
 class AddToCollectionRequest(BaseModel):
-    """Schema for adding documents to a collection (bulk)."""
-    content_ids: List[int]
+    """Schema for adding content to a collection (bulk)."""
+    content_ids: List[UUID]
 
 
-class CollectionReorderRequest(BaseModel):
-    """Schema for reordering collections."""
-    ordered_ids: List[int]
+class AddToCollectionResponse(BaseModel):
+    """Response for adding content to collection."""
+    added_count: int
+    already_present: int
 
 
 class CollectionListResponse(BaseModel):
     """Schema for list of collections."""
     collections: List[CollectionResponse]
     total: int
-
-
-# Import forward reference
-from app.schemas.document import DocumentResponse
-
-# Update forward reference
-CollectionWithDocuments.model_rebuild()

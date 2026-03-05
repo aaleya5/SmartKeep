@@ -90,3 +90,11 @@ class Content(Base):
         if not self.body:
             return 0
         return len(self.body.split())
+    
+    # Relationship to collections (join table)
+    collections = relationship(
+        "ContentCollection",
+        back_populates="content",
+        cascade="all, delete-orphan",
+        lazy="dynamic"
+    )
