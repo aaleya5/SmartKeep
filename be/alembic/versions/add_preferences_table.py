@@ -28,20 +28,20 @@ def upgrade() -> None:
         # Library defaults
         sa.Column('default_library_view', sa.String(20), nullable=False, server_default='grid'),
         sa.Column('default_sort_order', sa.String(20), nullable=False, server_default='newest'),
-        sa.Column('page_size', sa.Integer(), nullable=False, server_default=20),
+        sa.Column('page_size', sa.Integer(), nullable=False, server_default=sa.text('20')),
         
         # Enrichment
-        sa.Column('auto_enrich', sa.Boolean(), nullable=False, server_default=True),
+        sa.Column('auto_enrich', sa.Boolean(), nullable=False, server_default=sa.text('true')),
         sa.Column('llm_provider', sa.String(20), nullable=False, server_default='groq'),
         sa.Column('groq_api_key', sa.String(), nullable=True),
         sa.Column('ollama_base_url', sa.String(), nullable=False, server_default='http://localhost:11434'),
-        sa.Column('max_content_length', sa.Integer(), nullable=False, server_default=10000),
+        sa.Column('max_content_length', sa.Integer(), nullable=False, server_default=sa.text('10000')),
         
         # Appearance
         sa.Column('theme', sa.String(10), nullable=False, server_default='system'),
         sa.Column('accent_color', sa.String(10), nullable=False, server_default='#00C9A7'),
         sa.Column('reader_font_size', sa.String(10), nullable=False, server_default='medium'),
-        sa.Column('compact_density', sa.Boolean(), nullable=False, server_default=False),
+        sa.Column('compact_density', sa.Boolean(), nullable=False, server_default=sa.text('false')),
         
         # Audit
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
