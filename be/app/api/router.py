@@ -7,6 +7,7 @@ from app.api import annotations
 from app.api import tags
 from app.api import dashboard
 from app.api import explore
+from app.api import stats
 
 
 api_router = APIRouter()
@@ -19,3 +20,4 @@ api_router.include_router(annotations.router)
 api_router.include_router(tags.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(explore.router)
+api_router.include_router(stats.router)
