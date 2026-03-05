@@ -98,3 +98,11 @@ class Content(Base):
         cascade="all, delete-orphan",
         lazy="dynamic"
     )
+    
+    # Relationship to annotations
+    annotations = relationship(
+        "Annotation",
+        back_populates="content",
+        cascade="all, delete-orphan",
+        lazy="dynamic"
+    )
