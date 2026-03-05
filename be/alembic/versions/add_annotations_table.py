@@ -1,8 +1,8 @@
-"""Create annotations table
+"""Add annotations table
 
-Revision ID: annotations_v1
-Revises: collections_content_v1
-Create Date: 2026-03-05
+Revision ID: 005
+Revises: 004
+Create Date: 2026-03-01
 
 """
 from alembic import op
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = 'annotations_v1'
-down_revision = 'collections_content_v1'
+revision = '005'
+down_revision = '004'
 branch_labels = None
 depends_on = None
 
@@ -25,12 +25,12 @@ def upgrade() -> None:
                   sa.ForeignKey('content.id', ondelete='CASCADE'), nullable=False),
         sa.Column('selected_text', sa.Text(), nullable=False),
         sa.Column('note', sa.Text(), nullable=True),
-        sa.Column('color', sa.Text(), nullable=False, server_default='yellow'),
+        sa.Column('highlight_color', sa.String(length=20), nullable=False, server_default='yellow'),
         sa.Column('position_start', sa.Integer(), nullable=True),
         sa.Column('position_end', sa.Integer(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.CheckConstraint("color IN ('yellow', 'green', 'pink', 'blue')", name='ck_annotation_color'),
+        sa.CheckConstraint("highlight_color IN ('yellow', 'green', 'pink', 'blue')", name='ck_annotation_color'),
     )
     
     # Create indexes

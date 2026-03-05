@@ -1,16 +1,15 @@
-"""Create tag_stats materialized view
+"""Add tag stats materialized view
 
-Revision ID: tag_stats_v1
-Revises: annotations_v1
-Create Date: 2026-03-05
+Revision ID: 008
+Revises: 007
+Create Date: 2026-03-01
 
 """
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = 'tag_stats_v1'
-down_revision = 'annotations_v1'
+revision = '008'
+down_revision = '007'
 branch_labels = None
 depends_on = None
 
