@@ -12,11 +12,13 @@ All these operations are computationally expensive and run asynchronously.
 
 import logging
 from sqlalchemy.orm import Session
-from app.models.document import Document
+from app.models.content import Content
 from app.services.embedding_service import embedding_service
 from app.services.llm_service import llm_service
 from app.utils.readability import analyze_readability
 from app.db.session import SessionLocal
+from uuid import UUID
+from datetime import datetime
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 class EnrichmentService:
     """
-    Service for async document enrichment.
+    Service for async content enrichment.
     
     This handles:
     - Vector embedding generation (semantic search)
@@ -33,24 +35,25 @@ class EnrichmentService:
     """
     
     @staticmethod
-    def enrich_document(document_id: int) -> None:
+    def enrich_content(content_id: str) -> None:
         """
-        Perform full enrichment on a document.
+        Perform full enrichment on a content item.
         
         This method is designed to be called as a background task.
         
         Args:
-            document_id: The ID of the document to enrich
+            content_id: The UUID string of the content to enrich
         """
         db = SessionLocal()
         try:
-            document = db.query(Document).filter(Document.id == document_id).first()
-            if not document:
-                logger.warning(f"Document {document_id} not found for enrichment")
+            content = db.query(Content).filter(Content.id == UUID(content_id)).first()
+            if not content:
+                logger.warning(f"Content {content_id} not found for enrichment")
                 return
             
             # Update status to processing
-            document.enrichment_status = 'processing'
+            content.enrichment_status = 'processing'
+            content.enrichment_error = None
             db.commit()
             
             # Track enrichment success/failure for each step
@@ -60,105 +63,138 @@ class EnrichmentService:
             
             # Step 1: Generate embedding for semantic search
             try:
-                text_to_embed = f"{document.title} {document.content}"
+                text_to_embed = f"{content.title} {content.body or ''}"
                 embedding = embedding_service.embed(text_to_embed)
-                embedding_string = embedding_service.embedding_to_vector_string(embedding)
-                document.embedding = embedding_string
+                # Store as list for pgvector compatibility
+                content.embedding = embedding.tolist()
                 embedding_success = True
-                logger.info(f"Generated embedding for document {document_id}")
+                logger.info(f"Generated embedding for content {content_id}")
             except Exception as e:
-                logger.error(f"Error generating embedding for document {document_id}: {e}")
+                logger.error(f"Error generating embedding for content {content_id}: {e}")
             
             # Step 2: Calculate reading time and difficulty
             try:
-                readability = analyze_readability(document.content)
-                document.reading_time = readability['reading_time']
-                document.difficulty_score = readability['difficulty_score']
-                readability_success = True
-                logger.info(f"Calculated readability for document {document_id}: {readability['difficulty_level']}")
+                if content.body:
+                    readability = analyze_readability(content.body)
+                    content.readability_score = readability.get('difficulty_score')
+                    
+                    # Determine difficulty level
+                    score = readability.get('flesch_kincaid_score')
+                    if score:
+                        if score >= 60:
+                            content.difficulty = 'easy'
+                        elif score >= 30:
+                            content.difficulty = 'intermediate'
+                        else:
+                            content.difficulty = 'advanced'
+                    
+                    # Recalculate word_count
+                    content.word_count = len(content.body.split())
+                    
+                    readability_success = True
+                    logger.info(f"Calculated readability for content {content_id}")
             except Exception as e:
-                logger.error(f"Error calculating readability for document {document_id}: {e}")
+                logger.error(f"Error calculating readability for content {content_id}: {e}")
             
             # Step 3: Generate summary and tags using LLM
             try:
-                summary, suggested_tags = llm_service.summarize_and_tag(document.content)
-                if summary:
-                    document.summary = summary
-                if suggested_tags:
-                    document.suggested_tags = suggested_tags
-                llm_success = True
-                logger.info(f"Generated LLM enrichment for document {document_id}")
+                if content.body:
+                    summary, suggested_tags_json = llm_service.summarize_and_tag(content.body)
+                    if summary:
+                        content.summary = summary
+                    if suggested_tags_json:
+                        # Convert JSON string to list
+                        import json
+                        try:
+                            content.suggested_tags = json.loads(suggested_tags_json)
+                        except json.JSONDecodeError:
+                            pass
+                    llm_success = True
+                    logger.info(f"Generated LLM enrichment for content {content_id}")
             except Exception as e:
-                logger.error(f"Error generating LLM enrichment for document {document_id}: {e}")
+                logger.error(f"Error generating LLM enrichment for content {content_id}: {e}")
             
             # Mark enrichment status based on what succeeded
             if embedding_success or readability_success or llm_success:
-                document.enrichment_status = 'complete'
+                content.enrichment_status = 'complete'
             else:
-                document.enrichment_status = 'failed'
+                content.enrichment_status = 'failed'
+                content.enrichment_error = "All enrichment steps failed"
             
+            content.updated_at = datetime.utcnow()
             db.commit()
-            logger.info(f"Enrichment complete for document {document_id}")
+            logger.info(f"Enrichment complete for content {content_id}")
             
         except Exception as e:
-            logger.error(f"Error in enrich_document for document {document_id}: {e}")
+            logger.error(f"Error in enrich_content for content {content_id}: {e}")
             try:
                 db.rollback()
-                document = db.query(Document).filter(Document.id == document_id).first()
-                if document:
-                    document.enrichment_status = 'failed'
+                content = db.query(Content).filter(Content.id == UUID(content_id)).first()
+                if content:
+                    content.enrichment_status = 'failed'
+                    content.enrichment_error = str(e)
                     db.commit()
             except Exception as rollback_error:
-                logger.error(f"Failed to rollback enrichment for document {document_id}: {rollback_error}")
+                logger.error(f"Failed to rollback enrichment for content {content_id}: {rollback_error}")
         finally:
             db.close()
     
     @staticmethod
-    def generate_embedding_only(document_id: int) -> None:
+    def generate_embedding_only(content_id: str) -> None:
         """
         Generate embedding only (for quick semantic search indexing).
         
         Args:
-            document_id: The ID of the document
+            content_id: The UUID string of the content
         """
         db = SessionLocal()
         try:
-            document = db.query(Document).filter(Document.id == document_id).first()
-            if not document:
+            content = db.query(Content).filter(Content.id == UUID(content_id)).first()
+            if not content:
                 return
             
-            text_to_embed = f"{document.title} {document.content}"
+            text_to_embed = f"{content.title} {content.body or ''}"
             embedding = embedding_service.embed(text_to_embed)
-            embedding_string = embedding_service.embedding_to_vector_string(embedding)
-            document.embedding = embedding_string
+            content.embedding = embedding.tolist()
             db.commit()
-            logger.info(f"Generated embedding for document {document_id}")
+            logger.info(f"Generated embedding for content {content_id}")
         except Exception as e:
-            logger.error(f"Error generating embedding for document {document_id}: {e}")
+            logger.error(f"Error generating embedding for content {content_id}: {e}")
         finally:
             db.close()
     
     @staticmethod
-    def calculate_readability_only(document_id: int) -> None:
+    def calculate_readability_only(content_id: str) -> None:
         """
         Calculate reading time and difficulty score only.
         
         Args:
-            document_id: The ID of the document
+            content_id: The UUID string of the content
         """
         db = SessionLocal()
         try:
-            document = db.query(Document).filter(Document.id == document_id).first()
-            if not document:
+            content = db.query(Content).filter(Content.id == UUID(content_id)).first()
+            if not content or not content.body:
                 return
             
-            readability = analyze_readability(document.content)
-            document.reading_time = readability['reading_time']
-            document.difficulty_score = readability['difficulty_score']
+            readability = analyze_readability(content.body)
+            content.readability_score = readability.get('flesch_kincaid_score')
+            
+            # Determine difficulty level
+            score = readability.get('flesch_kincaid_score')
+            if score:
+                if score >= 60:
+                    content.difficulty = 'easy'
+                elif score >= 30:
+                    content.difficulty = 'intermediate'
+                else:
+                    content.difficulty = 'advanced'
+            
+            content.word_count = len(content.body.split())
             db.commit()
-            logger.info(f"Calculated readability for document {document_id}")
+            logger.info(f"Calculated readability for content {content_id}")
         except Exception as e:
-            logger.error(f"Error calculating readability for document {document_id}: {e}")
+            logger.error(f"Error calculating readability for content {content_id}: {e}")
         finally:
             db.close()
 
