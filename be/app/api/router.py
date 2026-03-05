@@ -8,6 +8,7 @@ from app.api import tags
 from app.api import dashboard
 from app.api import explore
 from app.api import stats
+from app.api import preferences
 
 
 api_router = APIRouter()
@@ -21,3 +22,4 @@ api_router.include_router(tags.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(explore.router)
 api_router.include_router(stats.router)
+api_router.include_router(preferences.router)
