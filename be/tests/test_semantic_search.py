@@ -15,7 +15,6 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services.embedding_service import embedding_service
-from app.services.semantic_search_service import SemanticSearchService
 
 
 class TestEmbeddingService:

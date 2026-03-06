@@ -7,11 +7,21 @@ from alembic import context
 
 # Import the Base from your models
 from app.db.base import Base
-from app.models.document import Document
+# Import all models so they are included in migrations
+from app.models.content import Content
+from app.models.collection import Collection, ContentCollection
+from app.models.annotation import Annotation
+from app.models.preferences import Preferences
+from app.models.search import SearchHistory, SavedSearch
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Override the database URL from .env if available
+import os
+if os.getenv('DATABASE_URL'):
+    config.set_main_option('sqlalchemy.url', os.getenv('DATABASE_URL'))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

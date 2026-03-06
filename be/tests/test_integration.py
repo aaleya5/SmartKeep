@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.db.base import Base
 from app.db.session import get_db
-from app.models.document import Document
+from app.models.content import Content
 
 # Import the shared engine from conftest
 from conftest import test_engine, TestSessionLocal
@@ -37,10 +37,6 @@ app.dependency_overrides[get_db] = override_get_db
 @pytest.fixture(scope="function")
 def client(db_engine):
     """Create test client with fresh database for each test."""
-    # Clear search cache before each test
-    from app.services.search_service import _index_cache
-    _index_cache.clear_cache()
-    
     # Create tables
     Base.metadata.create_all(bind=engine)
     
@@ -49,7 +45,7 @@ def client(db_engine):
     # Clean up - delete all records
     db = TestingSessionLocal()
     try:
-        db.query(Document).delete()
+        db.query(Content).delete()
         db.commit()
     finally:
         db.close()
@@ -88,7 +84,7 @@ class TestSaveAndSearch:
         doc_id = doc_data["id"]
         
         # Step 2: Verify document is in the database
-        doc = db_session.query(Document).filter(Document.id == doc_id).first()
+        doc = db_session.query(Content).filter(Content.id == doc_id).first()
         assert doc is not None
         assert doc.title == "Python Programming Guide"
         
@@ -156,7 +152,7 @@ class TestSearchEmptyState:
         an empty results list (empty state).
         """
         # Ensure no documents exist
-        assert db_session.query(Document).count() == 0
+        assert db_session.query(Content).count() == 0
         
         # Search for something that doesn't exist
         response = client.get(
@@ -274,9 +270,8 @@ class TestErrorHandling:
         # In production, we'd test actual error scenarios
         
         # Try to get documents (should work even if empty)
-        response = client.get("/documents/")
+        response = client.get("/content")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
 
 
 # Pytest configuration

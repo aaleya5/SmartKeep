@@ -12,7 +12,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func
+from sqlalchemy import func, text
 from app.models.collection import Collection, ContentCollection
 from app.models.content import Content
 from uuid import UUID
@@ -33,18 +33,32 @@ class CollectionService:
         is_pinned: bool = False
     ) -> Collection:
         """Create a new collection."""
-        # Get max sort_order
-        max_order = db.query(func.max(Collection.sort_order)).scalar()
-        next_order = (max_order + 1) if max_order is not None else 0
+        # Check if sort_order column exists
+        try:
+            db.execute(text("SELECT sort_order FROM collections LIMIT 1"))
+            has_sort_order = True
+        except Exception:
+            has_sort_order = False
+        
+        # Get max sort_order if column exists
+        if has_sort_order:
+            max_order = db.query(func.max(Collection.sort_order)).scalar()
+            next_order = (max_order + 1) if max_order is not None else 0
+        else:
+            next_order = 0
         
         collection = Collection(
             name=name,
             description=description,
             color=color,
             icon=icon,
-            is_pinned=is_pinned,
-            sort_order=next_order
         )
+        
+        # Only set these if the columns exist
+        if has_sort_order:
+            collection.is_pinned = is_pinned
+            collection.sort_order = next_order
+        
         db.add(collection)
         db.commit()
         db.refresh(collection)
@@ -89,22 +103,37 @@ class CollectionService:
     ) -> List[Dict[str, Any]]:
         """List all collections with content counts and preview images."""
         
-        # Determine sort order
-        if sort == "name":
-            order_by = Collection.name.asc()
-        elif sort == "newest":
-            order_by = Collection.created_at.desc()
-        elif sort == "item_count":
-            # Will handle in Python after query
-            order_by = Collection.created_at.desc()
-        elif sort == "manual":
-            order_by = Collection.is_pinned.desc(), Collection.sort_order.asc()
-        else:
-            order_by = Collection.created_at.desc()
+        # Determine sort order based on available columns
+        # Try to use is_pinned and sort_order if they exist, otherwise fallback
+        try:
+            # Test if is_pinned column exists
+            db.execute(text("SELECT is_pinned FROM collections LIMIT 1"))
+            has_pinned_column = True
+        except Exception:
+            has_pinned_column = False
         
-        collections = db.query(Collection).order_by(
-            Collection.is_pinned.desc(), order_by
-        ).all()
+        if has_pinned_column:
+            if sort == "name":
+                order_by = Collection.name.asc()
+            elif sort == "newest":
+                order_by = Collection.created_at.desc()
+            elif sort == "item_count":
+                # Will handle in Python after query
+                order_by = Collection.created_at.desc()
+            elif sort == "manual":
+                order_by = Collection.is_pinned.desc(), Collection.sort_order.asc()
+            else:
+                order_by = Collection.created_at.desc()
+            
+            collections = db.query(Collection).order_by(*order_by).all()
+        else:
+            # Fallback for older schema without is_pinned/sort_order
+            if sort == "name":
+                order_by = Collection.name.asc()
+            else:
+                order_by = Collection.created_at.desc()
+            
+            collections = db.query(Collection).order_by(order_by).all()
         
         result = []
         for collection in collections:
@@ -115,14 +144,22 @@ class CollectionService:
             
             preview_images = CollectionService.get_collection_preview_images(db, collection.id)
             
+            # Handle missing columns gracefully
+            try:
+                is_pinned = collection.is_pinned if has_pinned_column else False
+                sort_order = collection.sort_order if has_pinned_column else 0
+            except Exception:
+                is_pinned = False
+                sort_order = 0
+            
             result.append({
                 'id': collection.id,
                 'name': collection.name,
                 'description': collection.description,
                 'color': collection.color,
                 'icon': collection.icon,
-                'is_pinned': collection.is_pinned,
-                'sort_order': collection.sort_order,
+                'is_pinned': is_pinned,
+                'sort_order': sort_order,
                 'item_count': item_count,
                 'preview_images': preview_images,
                 'created_at': collection.created_at,
@@ -138,6 +175,17 @@ class CollectionService:
     @staticmethod
     def reorder_collections(db: Session, ordered_ids: List[UUID]) -> int:
         """Reorder collections based on provided order."""
+        # Check if sort_order column exists
+        try:
+            db.execute(text("SELECT sort_order FROM collections LIMIT 1"))
+            has_sort_order = True
+        except Exception:
+            has_sort_order = False
+        
+        if not has_sort_order:
+            logger.warning("Cannot reorder: sort_order column does not exist")
+            return 0
+        
         updated_count = 0
         for index, collection_id in enumerate(ordered_ids):
             collection = db.query(Collection).filter(Collection.id == collection_id).first()
@@ -173,10 +221,15 @@ class CollectionService:
             collection.color = color
         if icon is not None:
             collection.icon = icon
-        if is_pinned is not None:
-            collection.is_pinned = is_pinned
-        if sort_order is not None:
-            collection.sort_order = sort_order
+        
+        # Check if columns exist before updating
+        try:
+            if is_pinned is not None:
+                collection.is_pinned = is_pinned
+            if sort_order is not None:
+                collection.sort_order = sort_order
+        except Exception as e:
+            logger.warning(f"Could not update is_pinned/sort_order: {e}")
         
         db.commit()
         db.refresh(collection)

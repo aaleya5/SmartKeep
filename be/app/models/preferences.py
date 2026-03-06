@@ -19,20 +19,20 @@ class Preferences(Base):
     # Library defaults
     default_library_view = Column(String(20), nullable=False, server_default='grid')
     default_sort_order = Column(String(20), nullable=False, server_default='newest')
-    page_size = Column(Integer, nullable=False, server_default=20)
+    page_size = Column(Integer, nullable=False, server_default='20')
     
     # Enrichment
-    auto_enrich = Column(Boolean, nullable=False, server_default=True)
+    auto_enrich = Column(Boolean, nullable=False, server_default='true')
     llm_provider = Column(String(20), nullable=False, server_default='groq')
     groq_api_key = Column(String, nullable=True)
     ollama_base_url = Column(String, nullable=False, server_default='http://localhost:11434')
-    max_content_length = Column(Integer, nullable=False, server_default=10000)
+    max_content_length = Column(Integer, nullable=False, server_default='10000')
     
     # Appearance
     theme = Column(String(10), nullable=False, server_default='system')
     accent_color = Column(String(10), nullable=False, server_default='#00C9A7')
     reader_font_size = Column(String(10), nullable=False, server_default='medium')
-    compact_density = Column(Boolean, nullable=False, server_default=False)
+    compact_density = Column(Boolean, nullable=False, server_default='false')
     
     # Audit
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

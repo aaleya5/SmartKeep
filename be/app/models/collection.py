@@ -43,7 +43,7 @@ class Collection(Base):
     description = Column(Text, nullable=True)
     color = Column(String(7), nullable=False, default="#1A3A5C")
     icon = Column(String(50), nullable=False, default="📁")
-    is_pinned = Column(Boolean, nullable=False, default=False)
+    is_pinned = Column(Boolean, nullable=False, server_default='false')
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

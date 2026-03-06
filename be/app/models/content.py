@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime, Index, Boolean, Float, CheckConstraint
+from sqlalchemy import Column, String, Text, DateTime, Index, Boolean, Float, CheckConstraint, Integer
 from sqlalchemy.dialects.postgresql import TSVECTOR, UUID, ARRAY
 from sqlalchemy.types import TypeDecorator, TEXT
 from sqlalchemy.sql import func

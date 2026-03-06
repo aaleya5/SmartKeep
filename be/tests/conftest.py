@@ -32,7 +32,4 @@ TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_eng
 @pytest.fixture(scope="function")
 def db_engine():
     """Provide a shared test database engine."""
-    # Clear the search index cache before each test
-    from app.services.search_service import _index_cache
-    _index_cache.clear_cache()
     return test_engine
