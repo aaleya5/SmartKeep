@@ -114,27 +114,24 @@ class CollectionService:
         
         if has_pinned_column:
             if sort == "name":
-                order_by = Collection.name.asc()
+                collections = db.query(Collection).order_by(Collection.name.asc()).all()
             elif sort == "newest":
-                order_by = Collection.created_at.desc()
+                collections = db.query(Collection).order_by(Collection.created_at.desc()).all()
             elif sort == "item_count":
-                # Will handle in Python after query
-                order_by = Collection.created_at.desc()
+                collections = db.query(Collection).order_by(Collection.created_at.desc()).all()
             elif sort == "manual":
-                order_by = Collection.is_pinned.desc(), Collection.sort_order.asc()
+                collections = db.query(Collection).order_by(
+                    Collection.is_pinned.desc(), Collection.sort_order.asc()
+                ).all()
             else:
-                order_by = Collection.created_at.desc()
-            
-            collections = db.query(Collection).order_by(*order_by).all()
+                collections = db.query(Collection).order_by(Collection.created_at.desc()).all()
         else:
             # Fallback for older schema without is_pinned/sort_order
             if sort == "name":
-                order_by = Collection.name.asc()
+                collections = db.query(Collection).order_by(Collection.name.asc()).all()
             else:
-                order_by = Collection.created_at.desc()
-            
-            collections = db.query(Collection).order_by(order_by).all()
-        
+                collections = db.query(Collection).order_by(Collection.created_at.desc()).all()
+                
         result = []
         for collection in collections:
             item_count = CollectionService.get_collection_content_count(db, collection.id)

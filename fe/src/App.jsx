@@ -1,26 +1,51 @@
-import { useState, useEffect } from 'react';
-import { documentAPI, contentAPI, searchAPI, collectionAPI } from './services/api';
+import { useState, useEffect, useRef } from 'react';
+import { documentAPI, contentAPI, collectionAPI } from './services/api';
 import ErrorBoundary from './components/ErrorBoundary';
-import CollectionsSidebar from './components/CollectionsSidebar';
+import Layout from './components/Layout';
+import Dashboard from './components/Dashboard';
+import Library from './components/Library';
+import SearchPage from './components/SearchPage';
+import ContentDetailPage from './components/ContentDetailPage';
 import AddToCollectionModal from './components/AddToCollectionModal';
+import CollectionsPage from './components/CollectionsPage';
+import CollectionDetailPage from './components/CollectionDetailPage';
+import ExplorePage from './components/ExplorePage';
+import AnnotationsPage from './components/AnnotationsPage';
+import InsightsPage from './components/InsightsPage';
+import SettingsPage from './components/SettingsPage';
+import OnboardingFlow from './components/OnboardingFlow';
+import QuickSaveModal from './components/QuickSaveModal';
+import OfflineBanner from './components/common/OfflineBanner';
+import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 import './App.css';
 
 function App() {
+  // Current page/view state
+  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [currentPageParams, setCurrentPageParams] = useState(null);
+  
+  // Documents state
   const [documents, setDocuments] = useState([]);
-  const [activeTab, setActiveTab] = useState('documents');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchModel, setSearchModel] = useState('bm25');
-  const [searchLatency, setSearchLatency] = useState(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
   
   // Collections state
   const [collections, setCollections] = useState([]);
+  
+  // Tags state (extracted from documents)
+  const [allTags, setAllTags] = useState([]);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchBarRef = useRef(null);
+  
+  // Collections state
   const [selectedCollection, setSelectedCollection] = useState(null);
-  const [collectionRefreshTrigger, setCollectionRefreshTrigger] = useState(0);
+  const [currentCollectionDetail, setCurrentCollectionDetail] = useState(null);
+  const [collectionsRefreshTrigger, setCollectionsRefreshTrigger] = useState(0);
   const [showAddToCollection, setShowAddToCollection] = useState(false);
   const [selectedDocumentForCollection, setSelectedDocumentForCollection] = useState(null);
+  
+  // Quick save modal state
+  const [showQuickSave, setShowQuickSave] = useState(false);
   
   // Form states
   const [urlInput, setUrlInput] = useState('');
@@ -29,23 +54,90 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
+  
+  // Dark mode state
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  
+  // Onboarding state
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isLoadingOnboarding, setIsLoadingOnboarding] = useState(true);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    's': () => setShowQuickSave(true),
+    'f': () => {
+      // Focus the search bar
+      const searchInput = document.querySelector('input[type="search"], input[placeholder*="Search"]');
+      if (searchInput) {
+        searchInput.focus();
+      } else {
+        // Navigate to search page
+        setCurrentPage('search');
+      }
+    },
+  }, { enabled: true, ignoreInputKeys: [] });
 
   useEffect(() => {
     fetchDocuments();
+    fetchCollections();
+    checkOnboardingStatus();
   }, []);
+  
+  const fetchCollections = async () => {
+    try {
+      const response = await collectionAPI.getAll(true, 'newest');
+      // Backend returns { collections: [], total }
+      setCollections(response.data.collections || []);
+    } catch (err) {
+      console.error('Failed to fetch collections:', err);
+    }
+  };
+  
+  const checkOnboardingStatus = () => {
+    // Check if user has any documents or if onboarding was already completed
+    const onboardingComplete = localStorage.getItem('smartkeep_onboarding_complete');
+    
+    // For now, we'll show onboarding if it hasn't been completed
+    // In a real app, you might also check if there are any documents
+    if (!onboardingComplete) {
+      // Small delay to ensure app is loaded
+      setTimeout(() => {
+        setShowOnboarding(true);
+        setIsLoadingOnboarding(false);
+      }, 500);
+    } else {
+      setIsLoadingOnboarding(false);
+    }
+  };
+  
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    // Refresh documents after onboarding
+    fetchDocuments();
+  };
 
   const fetchDocuments = async (collectionId = null) => {
     setIsLoading(true);
     try {
       let response;
       if (collectionId) {
-        // Fetch documents for specific collection
-        response = await collectionAPI.get(collectionId);
-        setDocuments(response.data.documents || []);
+        // Use getContent to fetch documents in a collection
+        response = await collectionAPI.getContent(collectionId);
+        setDocuments(response.data.items || []);
       } else {
-        // Fetch all documents
         response = await documentAPI.getAll();
-        setDocuments(response.data);
+        // Backend returns { items: [], total, page, page_size, has_next }
+        const docs = response.data.items || [];
+        setDocuments(docs);
+        
+        // Extract unique tags from all documents
+        const tagsSet = new Set();
+        docs.forEach(doc => {
+          if (doc.suggested_tags && Array.isArray(doc.suggested_tags)) {
+            doc.suggested_tags.forEach(tag => tagsSet.add(tag));
+          }
+        });
+        setAllTags(Array.from(tagsSet));
       }
     } catch (err) {
       console.error(err);
@@ -55,7 +147,29 @@ function App() {
     }
   };
 
-  const handleCollectionSelect = (collectionId) => {
+  const handleNavigate = (page, options = {}) => {
+    setCurrentPage(page);
+    setCurrentPageParams(options.selectedItem || null);
+    clearMessages();
+    
+    // Refresh collections when navigating to library
+    if (page === 'library') {
+      fetchCollections();
+    }
+    
+    // Handle navigation-specific logic
+    if (options.filterTag) {
+      // Filter by tag - could be implemented later
+      console.log('Filter by tag:', options.filterTag);
+    }
+    if (options.selectedItem) {
+      // Navigate to specific item - could be implemented later
+      console.log('Selected item:', options.selectedItem);
+    }
+  };
+
+  // Placeholder for collection selection (to be implemented)
+  const _handleCollectionSelect = (collectionId) => {
     setSelectedCollection(collectionId);
     fetchDocuments(collectionId);
   };
@@ -76,7 +190,7 @@ function App() {
       setSuccessMessage('Document created from URL successfully! AI enrichment will complete shortly.');
       setUrlInput('');
       fetchDocuments();
-      setActiveTab('documents');
+      setCurrentPage('documents');
     } catch (err) {
       const errorMsg = err.response?.data?.detail || err.response?.data?.message || 'Failed to fetch URL content';
       setError(errorMsg);
@@ -97,7 +211,7 @@ function App() {
       setManualTitle('');
       setManualContent('');
       fetchDocuments();
-      setActiveTab('documents');
+      setCurrentPage('documents');
     } catch (err) {
       const errorMsg = err.response?.data?.detail || 'Failed to create document';
       setError(errorMsg);
@@ -106,24 +220,34 @@ function App() {
     }
   };
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-    
-    setIsSearching(true);
+  // Quick save handler
+  const handleQuickSave = async (data) => {
+    setIsLoading(true);
     setError(null);
-    setHasSearched(true);
     
     try {
-      const response = await searchAPI.search(searchQuery, searchModel);
-      setSearchResults(response.data.results || []);
-      setSearchLatency(response.data.latency_ms);
+      if (data.url) {
+        await contentAPI.createFromURL(data.url);
+        setSuccessMessage('Document created from URL successfully!');
+      } else if (data.title && data.content) {
+        await contentAPI.createManual(data.title, data.content);
+        setSuccessMessage('Document created successfully!');
+      }
+      fetchDocuments();
     } catch (err) {
-      setError('Search failed: ' + (err.response?.data?.detail || err.message));
-      console.error(err);
+      const errorMsg = err.response?.data?.detail || err.response?.data?.message || 'Failed to save';
+      setError(errorMsg);
+      throw err; // Re-throw so the modal knows it failed
     } finally {
-      setIsSearching(false);
+      setIsLoading(false);
     }
+  };
+
+  const handleSearch = (query) => {
+    if (!query.trim()) return;
+    
+    setSearchQuery(query);
+    setCurrentPage('search');
   };
 
   const handleReEnrich = async (docId) => {
@@ -134,6 +258,11 @@ function App() {
     } catch (err) {
       setError('Failed to trigger enrichment: ' + (err.response?.data?.detail || err.message));
     }
+  };
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode);
+    // Could save preference to backend here
   };
 
   const clearMessages = () => {
@@ -177,301 +306,304 @@ function App() {
     return <span className="enrichment-status pending">⏳ Pending</span>;
   };
 
+  // Determine which view to show based on currentPage
+  const renderContent = () => {
+    switch (currentPage) {
+      case 'dashboard':
+        return (
+          <Dashboard
+            documents={documents}
+            onNavigate={handleNavigate}
+            onSelectDocument={(doc) => console.log('Selected:', doc)}
+          />
+        );
+      case 'library':
+        return (
+          <Library
+            documents={documents}
+            collections={collections}
+            tags={allTags}
+            onSelectDocument={(doc) => console.log('Selected:', doc)}
+            onRefresh={fetchDocuments}
+          />
+        );
+      case 'documents':
+        return renderDocumentsView();
+      case 'add':
+        return renderAddView();
+      case 'search':
+        return <SearchPage initialQuery={searchQuery} />;
+      case 'content-detail':
+        return (
+          <ContentDetailPage
+            contentId={currentPageParams?.id || currentPageParams}
+            onNavigate={handleNavigate}
+            onDeleteDocument={(id) => {
+              setDocuments(documents.filter(d => d.id !== id));
+            }}
+          />
+        );
+      case 'collections':
+        return (
+          <CollectionsPage
+            onNavigate={handleNavigate}
+            onSelectCollection={(collection) => {
+              setCurrentCollectionDetail(collection);
+            }}
+            refreshTrigger={collectionsRefreshTrigger}
+          />
+        );
+      case 'collection-detail':
+        return (
+          <CollectionDetailPage
+            collection={currentPageParams?.collection || currentCollectionDetail}
+            onNavigate={handleNavigate}
+            onBack={() => {
+              setCurrentCollectionDetail(null);
+              setCurrentPage('collections');
+              setCollectionsRefreshTrigger(t => t + 1);
+            }}
+          />
+        );
+      case 'explore':
+        return <ExplorePage onNavigate={handleNavigate} />;
+      case 'annotations':
+        return (
+          <AnnotationsPage
+            onNavigate={handleNavigate}
+          />
+        );
+      case 'insights':
+        return <InsightsPage />;
+      case 'settings':
+        return <SettingsPage onThemeChange={(theme) => setIsDarkMode(theme === 'dark')} />;
+      default:
+        return renderDocumentsView();
+    }
+  };
+
+  const renderDocumentsView = () => (
+    <div className="documents-view">
+      <div className="documents-layout">
+        <h2>
+          {selectedCollection ? 'Collection Documents' : 'All Documents'}
+        </h2>
+        {isLoading && (
+          <div className="loading-indicator">
+            <div className="spinner"></div>
+            <span>Loading documents...</span>
+          </div>
+        )}
+        {documents.length === 0 && !isLoading ? (
+          <div className="empty-state">
+            <p>No documents yet.</p>
+            <button onClick={() => setCurrentPage('add')} className="btn primary">
+              Add your first document
+            </button>
+          </div>
+        ) : (
+          <div className="documents-grid">
+            {documents.map((doc) => (
+              <div key={doc.id} className="document-card">
+                <h3>{doc.title}</h3>
+                
+                {/* AI Enrichment Info */}
+                <div className="document-ai-info">
+                  {getEnrichmentStatus(doc.enrichment_status)}
+                  {doc.reading_time && (
+                    <span className="reading-time">📖 {getReadingTime(doc.reading_time)}</span>
+                  )}
+                  {doc.difficulty_score && getDifficultyBadge(doc.difficulty_score)}
+                </div>
+                
+                {/* Summary (if available) */}
+                {doc.summary && (
+                  <p className="document-summary">
+                    <strong>Summary:</strong> {doc.summary}
+                  </p>
+                )}
+                
+                <p className="document-content">
+                  {doc.content.length > 150 
+                    ? doc.content.substring(0, 150) + '...' 
+                    : doc.content}
+                </p>
+                
+                {/* Suggested Tags */}
+                {doc.suggested_tags && doc.suggested_tags.length > 0 && (
+                  <div className="suggested-tags">
+                    <strong>Suggested tags:</strong> 
+                    {doc.suggested_tags.map((tag, idx) => (
+                      <span key={idx} className="tag">{tag}</span>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="document-meta">
+                  {doc.domain && <span className="domain">{doc.domain}</span>}
+                  {doc.source_url && (
+                    <a href={doc.source_url} target="_blank" rel="noopener noreferrer" className="source-link">
+                      View Source
+                    </a>
+                  )}
+                  <button 
+                    className="add-to-collection-btn"
+                    onClick={() => handleAddToCollection(doc.id)}
+                    title="Add to collection"
+                  >
+                    📁
+                  </button>
+                  {doc.enrichment_status === 'failed' || doc.enrichment_status === 'pending' ? (
+                    <button 
+                      className="re-enrich-btn"
+                      onClick={() => handleReEnrich(doc.id)}
+                    >
+                      Re-enrich
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderAddView = () => (
+    <div className="add-content-view">
+      <h2>Add New Content</h2>
+      
+      <div className="add-options">
+        <div className="add-option">
+          <h3>From URL</h3>
+          <form onSubmit={handleURLSubmit}>
+            <div className="form-group">
+              <label htmlFor="url">Enter URL:</label>
+              <input
+                type="url"
+                id="url"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="https://example.com/article"
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <button type="submit" className="btn primary" disabled={isLoading}>
+              {isLoading ? <><span className="spinner-small"></span> Fetching...</> : 'Fetch Content'}
+            </button>
+          </form>
+          <p className="form-hint">Content will be automatically enriched with AI summary, tags, and readability analysis.</p>
+        </div>
+
+        <div className="divider">OR</div>
+
+        <div className="add-option">
+          <h3>Manual Entry</h3>
+          <form onSubmit={handleManualSubmit}>
+            <div className="form-group">
+              <label htmlFor="title">Title:</label>
+              <input
+                type="text"
+                id="title"
+                value={manualTitle}
+                onChange={(e) => setManualTitle(e.target.value)}
+                placeholder="Enter document title"
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="content">Content:</label>
+              <textarea
+                id="content"
+                value={manualContent}
+                onChange={(e) => setManualContent(e.target.value)}
+                placeholder="Enter document content..."
+                rows={6}
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <button type="submit" className="btn primary" disabled={isLoading}>
+              {isLoading ? <><span className="spinner-small"></span> Saving...</> : 'Save Document'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <ErrorBoundary>
-      <div className="app">
-        <header className="header">
-          <h1>SmartKeep</h1>
-          <p className="subtitle">Your Personal Knowledge Management System</p>
-        </header>
-
-        <nav className="nav-tabs">
-          <button 
-            className={`tab ${activeTab === 'documents' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('documents'); clearMessages(); }}
-          >
-            Documents
-          </button>
-          <button 
-            className={`tab ${activeTab === 'add' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('add'); clearMessages(); }}
-          >
-            Add Content
-          </button>
-          <button 
-            className={`tab ${activeTab === 'search' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('search'); clearMessages(); }}
-          >
-            Search
-          </button>
-        </nav>
-
-        <main className="main-content">
-          {error && (
-            <div className="alert error">
-              {error}
-              <button onClick={() => setError(null)} className="close-btn">×</button>
-            </div>
-          )}
+      {showOnboarding && !isLoadingOnboarding ? (
+        <OnboardingFlow onComplete={handleOnboardingComplete} />
+      ) : (
+        <>
+          {/* Offline Banner */}
+          <OfflineBanner />
           
-          {successMessage && (
-            <div className="alert success">
-              {successMessage}
-              <button onClick={() => setSuccessMessage(null)} className="close-btn">×</button>
-            </div>
-          )}
-
-          {activeTab === 'documents' && (
-            <div className="documents-view">
-              <div className="documents-layout">
-                <CollectionsSidebar 
-                  selectedCollection={selectedCollection}
-                  onSelectCollection={handleCollectionSelect}
-                  refreshTrigger={collectionRefreshTrigger}
-                />
-                <div className="documents-main">
-                  <h2>
-                    {selectedCollection ? 'Collection Documents' : 'All Documents'}
-                  </h2>
-                  {isLoading && (
-                    <div className="loading-indicator">
-                      <div className="spinner"></div>
-                      <span>Loading documents...</span>
-                    </div>
-                  )}
-                  {documents.length === 0 && !isLoading ? (
-                    <div className="empty-state">
-                      <p>No documents yet.</p>
-                      <button onClick={() => setActiveTab('add')} className="btn primary">
-                        Add your first document
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="documents-grid">
-                      {documents.map((doc) => (
-                        <div key={doc.id} className="document-card">
-                          <h3>{doc.title}</h3>
-                          
-                          {/* AI Enrichment Info */}
-                          <div className="document-ai-info">
-                            {getEnrichmentStatus(doc.enrichment_status)}
-                            {doc.reading_time && (
-                              <span className="reading-time">📖 {getReadingTime(doc.reading_time)}</span>
-                            )}
-                            {doc.difficulty_score && getDifficultyBadge(doc.difficulty_score)}
-                          </div>
-                          
-                          {/* Summary (if available) */}
-                          {doc.summary && (
-                            <p className="document-summary">
-                              <strong>Summary:</strong> {doc.summary}
-                            </p>
-                          )}
-                          
-                          <p className="document-content">
-                            {doc.content.length > 150 
-                              ? doc.content.substring(0, 150) + '...' 
-                              : doc.content}
-                          </p>
-                          
-                          {/* Suggested Tags */}
-                          {doc.suggested_tags && doc.suggested_tags.length > 0 && (
-                            <div className="suggested-tags">
-                              <strong>Suggested tags:</strong> 
-                              {doc.suggested_tags.map((tag, idx) => (
-                                <span key={idx} className="tag">{tag}</span>
-                              ))}
-                            </div>
-                          )}
-                          
-                          <div className="document-meta">
-                            {doc.domain && <span className="domain">{doc.domain}</span>}
-                            {doc.source_url && (
-                              <a href={doc.source_url} target="_blank" rel="noopener noreferrer" className="source-link">
-                                View Source
-                              </a>
-                            )}
-                            <button 
-                              className="add-to-collection-btn"
-                              onClick={() => handleAddToCollection(doc.id)}
-                              title="Add to collection"
-                            >
-                              📁
-                            </button>
-                            {doc.enrichment_status === 'failed' || doc.enrichment_status === 'pending' ? (
-                              <button 
-                                className="re-enrich-btn"
-                                onClick={() => handleReEnrich(doc.id)}
-                              >
-                                Re-enrich
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+          <Layout
+            currentPage={currentPage}
+            onNavigate={handleNavigate}
+            documents={documents}
+            isDarkMode={isDarkMode}
+            onToggleDarkMode={toggleDarkMode}
+            onSearch={handleSearch}
+            onOpenSettings={() => setCurrentPage('settings')}
+          >
+            <div className={`app ${isDarkMode ? 'dark-mode' : ''}`}>
+              {/* Keyboard shortcut hints */}
+              <div className="keyboard-hints">
+                <span><kbd>S</kbd> Quick Save</span>
+                <span><kbd>F</kbd> Search</span>
+              </div>
+              
+              {/* Alerts */}
+              {error && (
+                <div className="alert error">
+                  {error}
+                  <button onClick={() => setError(null)} className="close-btn">×</button>
                 </div>
+              )}
+              
+              {successMessage && (
+                <div className="alert success">
+                  {successMessage}
+                  <button onClick={() => setSuccessMessage(null)} className="close-btn">×</button>
+                </div>
+              )}
+
+              {/* Main Content */}
+              <div className="main-content">
+                {renderContent()}
               </div>
             </div>
-          )}
 
-          {activeTab === 'add' && (
-            <div className="add-content-view">
-              <h2>Add New Content</h2>
-              
-              <div className="add-options">
-                <div className="add-option">
-                  <h3>From URL</h3>
-                  <form onSubmit={handleURLSubmit}>
-                    <div className="form-group">
-                      <label htmlFor="url">Enter URL:</label>
-                      <input
-                        type="url"
-                        id="url"
-                        value={urlInput}
-                        onChange={(e) => setUrlInput(e.target.value)}
-                        placeholder="https://example.com/article"
-                        required
-                        disabled={isLoading}
-                      />
-                    </div>
-                    <button type="submit" className="btn primary" disabled={isLoading}>
-                      {isLoading ? <><span className="spinner-small"></span> Fetching...</> : 'Fetch Content'}
-                    </button>
-                  </form>
-                  <p className="form-hint">Content will be automatically enriched with AI summary, tags, and readability analysis.</p>
-                </div>
+            {/* Add to Collection Modal */}
+            <AddToCollectionModal
+              isOpen={showAddToCollection}
+              onClose={() => {
+                setShowAddToCollection(false);
+                setSelectedDocumentForCollection(null);
+              }}
+              documentId={selectedDocumentForCollection}
+              documentTitle={documents.find(d => d.id === selectedDocumentForCollection)?.title}
+              onSuccess={() => {
+                fetchDocuments(selectedCollection);
+              }}
+            />
 
-                <div className="divider">OR</div>
-
-                <div className="add-option">
-                  <h3>Manual Entry</h3>
-                  <form onSubmit={handleManualSubmit}>
-                    <div className="form-group">
-                      <label htmlFor="title">Title:</label>
-                      <input
-                        type="text"
-                        id="title"
-                        value={manualTitle}
-                        onChange={(e) => setManualTitle(e.target.value)}
-                        placeholder="Enter document title"
-                        required
-                        disabled={isLoading}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label htmlFor="content">Content:</label>
-                      <textarea
-                        id="content"
-                        value={manualContent}
-                        onChange={(e) => setManualContent(e.target.value)}
-                        placeholder="Enter document content..."
-                        rows={6}
-                        required
-                        disabled={isLoading}
-                      />
-                    </div>
-                    <button type="submit" className="btn primary" disabled={isLoading}>
-                      {isLoading ? <><span className="spinner-small"></span> Saving...</> : 'Save Document'}
-                    </button>
-                  </form>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'search' && (
-            <div className="search-view">
-              <h2>Search Documents</h2>
-              
-              <form onSubmit={handleSearch} className="search-form">
-                <div className="search-input-group">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Enter search query..."
-                    className="search-input"
-                    disabled={isSearching}
-                  />
-                  <select 
-                    value={searchModel} 
-                    onChange={(e) => setSearchModel(e.target.value)}
-                    className="model-select"
-                    disabled={isSearching}
-                  >
-                    <option value="bm25">BM25</option>
-                    <option value="tfidf">TF-IDF</option>
-                    <option value="fts">PostgreSQL FTS</option>
-                    <option value="semantic">Semantic (AI)</option>
-                    <option value="hybrid">Hybrid (BM25 + Semantic)</option>
-                  </select>
-                  <button type="submit" className="btn primary" disabled={isSearching}>
-                    {isSearching ? <><span className="spinner-small"></span> Searching...</> : 'Search'}
-                  </button>
-                </div>
-              </form>
-
-              {/* Search Performance Info */}
-              {searchLatency !== null && (
-                <div className="search-meta">
-                  <span className={`latency ${searchLatency < 500 ? 'fast' : 'slow'}`}>
-                    ⚡ Search completed in {searchLatency.toFixed(2)}ms
-                  </span>
-                  <span className="model-badge">{searchModel.toUpperCase()}</span>
-                </div>
-              )}
-
-              {/* Search Results */}
-              {hasSearched && searchResults.length > 0 && (
-                <div className="search-results">
-                  <h3>Results ({searchResults.length})</h3>
-                  {searchResults.map((result, index) => (
-                    <div key={index} className="result-card">
-                      <div className="result-header">
-                        <h4>{result.title}</h4>
-                        <span className="result-score">
-                          {result.score !== undefined && `Score: ${result.score.toFixed(4)}`}
-                          {result.similarity_score !== undefined && `Similarity: ${result.similarity_score.toFixed(4)}`}
-                          {result.combined_score !== undefined && `Combined: ${result.combined_score.toFixed(4)}`}
-                        </span>
-                      </div>
-                      <p className="result-content">{result.content}</p>
-                      {result.summary && (
-                        <p className="result-summary"><strong>Summary:</strong> {result.summary}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Empty State - No Results */}
-              {hasSearched && searchResults.length === 0 && !isSearching && !error && (
-                <div className="empty-state search-empty">
-                  <p>No documents found matching your search.</p>
-                  <p className="empty-hint">Try different keywords or add more documents.</p>
-                </div>
-              )}
-            </div>
-          )}
-        </main>
-
-        {/* Add to Collection Modal */}
-        <AddToCollectionModal
-          isOpen={showAddToCollection}
-          onClose={() => {
-            setShowAddToCollection(false);
-            setSelectedDocumentForCollection(null);
-          }}
-          documentId={selectedDocumentForCollection}
-          documentTitle={documents.find(d => d.id === selectedDocumentForCollection)?.title}
-          onSuccess={() => {
-            setCollectionRefreshTrigger(prev => prev + 1);
-            fetchDocuments(selectedCollection);
-          }}
-        />
-      </div>
+            {/* Quick Save Modal */}
+            <QuickSaveModal
+              isOpen={showQuickSave}
+              onClose={() => setShowQuickSave(false)}
+              onSave={handleQuickSave}
+            />
+          </Layout>
+        </>
+      )}
     </ErrorBoundary>
   );
 }

@@ -125,37 +125,44 @@ def get_content_list(
     - enrichment_status: pending, processing, complete, failed
     - is_truncated: Boolean
     """
-    # Parse tags from comma-separated string
-    tag_list = None
-    if tags:
-        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-    
-    items, total = ContentService.get_list(
-        db,
-        page=page,
-        page_size=page_size,
-        sort=sort.value,
-        tags=tag_list,
-        domain=domain,
-        date_from=date_from,
-        date_to=date_to,
-        min_reading_time=min_reading_time,
-        max_reading_time=max_reading_time,
-        difficulty=difficulty.value if difficulty else None,
-        is_read=is_read,
-        enrichment_status=enrichment_status.value if enrichment_status else None,
-        is_truncated=is_truncated,
-    )
-    
-    has_next = (page * page_size) < total
-    
-    return ContentListResponse(
-        items=items,
-        total=total,
-        page=page,
-        page_size=page_size,
-        has_next=has_next,
-    )
+    try:
+        # Parse tags from comma-separated string
+        tag_list = None
+        if tags:
+            tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+        
+        items, total = ContentService.get_list(
+            db,
+            page=page,
+            page_size=page_size,
+            sort=sort.value,
+            tags=tag_list,
+            domain=domain,
+            date_from=date_from,
+            date_to=date_to,
+            min_reading_time=min_reading_time,
+            max_reading_time=max_reading_time,
+            difficulty=difficulty.value if difficulty else None,
+            is_read=is_read,
+            enrichment_status=enrichment_status.value if enrichment_status else None,
+            is_truncated=is_truncated,
+        )
+        
+        has_next = (page * page_size) < total
+        
+        return ContentListResponse(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            has_next=has_next,
+        )
+    except Exception as e:
+        import traceback
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching content: {str(e)}\n{traceback.format_exc()}"
+        )
 
 
 @router.get("/{content_id}", response_model=ContentResponse)
