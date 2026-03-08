@@ -16,8 +16,11 @@
     "@tanstack/react-virtual": "^3.13.21",
     "axios": "^1.13.5",
     "d3": "^7.9.0",
+    "framer-motion": "^12.35.1",
+    "lucide-react": "^0.577.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-router-dom": "^7.13.1",
     "recharts": "^3.7.0"
   },
   "devDependencies": {

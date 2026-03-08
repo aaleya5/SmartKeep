@@ -168,286 +168,116 @@ export default function QuickSaveModal({ isOpen, onClose, onSave }) {
 
       <style>{`
         .quick-save-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 9999;
-          animation: fadeIn 0.2s ease-out;
+          position: fixed; inset: 0;
+          background: rgba(0, 0, 0, 0.7);
+          backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 9999; animation: fadeIn 0.2s ease-out;
         }
 
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         .quick-save-modal {
-          background: white;
-          border-radius: 16px;
-          width: 100%;
-          max-width: 500px;
-          max-height: 90vh;
-          overflow-y: auto;
+          background: var(--card-bg);
+          border: 1px solid var(--border-color);
+          border-radius: var(--border-radius-lg);
+          box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+          width: 100%; max-width: 500px; max-height: 90vh;
+          overflow-y: auto; color: var(--text-color);
           animation: slideUp 0.2s ease-out;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }
 
         @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px) scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
+          from { opacity: 0; transform: translateY(20px) scale(0.95); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
         .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1.25rem 1.5rem;
-          border-bottom: 1px solid #e5e7eb;
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
-        .modal-header h2 {
-          font-size: 1.25rem;
-          font-weight: 600;
-          margin: 0;
-          color: #1f2937;
-        }
+        .modal-header h2 { font-size: 1.25rem; font-weight: 600; margin: 0; }
 
         .close-btn {
-          width: 32px;
-          height: 32px;
-          border: none;
-          background: transparent;
-          cursor: pointer;
-          font-size: 1.5rem;
-          color: #6b7280;
-          border-radius: 6px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .close-btn:hover {
-          background: #f3f4f6;
-        }
-
-        .modal-tabs {
-          display: flex;
-          border-bottom: 1px solid #e5e7eb;
-        }
-
-        .modal-tabs .tab {
-          flex: 1;
-          padding: 0.875rem;
-          border: none;
-          background: transparent;
-          cursor: pointer;
-          font-size: 0.9rem;
-          font-weight: 500;
-          color: #6b7280;
+          width: 32px; height: 32px; border: none; background: transparent;
+          cursor: pointer; font-size: 1.5rem; color: var(--text-secondary);
+          border-radius: 6px; display: flex; align-items: center; justify-content: center;
           transition: all 0.2s;
         }
+        .close-btn:hover { color: var(--text-color); background: rgba(255,255,255,0.05); }
 
-        .modal-tabs .tab:hover {
-          background: #f9fafb;
+        .modal-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+        .modal-tabs .tab {
+          flex: 1; padding: 14px; border: none; background: transparent;
+          cursor: pointer; font-size: 0.9rem; font-weight: 500;
+          color: var(--text-secondary); transition: all 0.2s;
         }
-
+        .modal-tabs .tab:hover { color: var(--text-color); background: rgba(255,255,255,0.02); }
         .modal-tabs .tab.active {
-          color: #6366f1;
-          border-bottom: 2px solid #6366f1;
+          color: var(--accent-color);
+          border-bottom: 2px solid var(--accent-color);
           margin-bottom: -1px;
         }
 
-        form {
-          padding: 1.5rem;
-        }
+        form { padding: 24px; }
 
-        .form-group {
-          margin-bottom: 1rem;
-        }
-
+        .form-group { margin-bottom: 20px; }
         .form-group label {
-          display: block;
-          font-size: 0.9rem;
-          font-weight: 500;
-          color: #374151;
-          margin-bottom: 0.5rem;
+          display: block; font-size: 0.9rem; font-weight: 500;
+          color: var(--text-secondary); margin-bottom: 8px;
         }
 
-        .form-group input,
-        .form-group textarea {
-          width: 100%;
-          padding: 0.75rem;
-          border: 1px solid #d1d5db;
-          border-radius: 8px;
-          font-size: 0.95rem;
-          transition: border-color 0.2s, box-shadow 0.2s;
-          box-sizing: border-box;
+        .form-group input, .form-group textarea {
+          width: 100%; padding: 12px; background: rgba(0,0,0,0.2);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          color: var(--text-color); font-size: 0.95rem; outline: none; transition: all 0.2s;
         }
 
-        .form-group input:focus,
-        .form-group textarea:focus {
-          outline: none;
-          border-color: #6366f1;
-          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        .form-group input:focus, .form-group textarea:focus {
+          border-color: var(--accent-color);
+          box-shadow: 0 0 0 2px rgba(245, 200, 66, 0.1);
         }
 
-        .form-group textarea {
-          resize: vertical;
-          font-family: inherit;
-        }
+        .form-group textarea { font-family: var(--font-mono); font-size: 13px; }
 
-        .form-hint {
-          font-size: 0.8rem;
-          color: #6b7280;
-          margin-top: 0.5rem;
-        }
+        .form-hint { font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; }
 
         .error-message {
-          background: #fef2f2;
-          color: #dc2626;
-          padding: 0.75rem;
-          border-radius: 8px;
-          font-size: 0.9rem;
-          margin-bottom: 1rem;
+          background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);
+          padding: 12px; border-radius: 8px; font-size: 0.9rem; margin-bottom: 20px;
         }
 
-        .modal-actions {
-          display: flex;
-          gap: 0.75rem;
-          justify-content: flex-end;
+        .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+
+        .btn-primary, .btn-secondary {
+          padding: 10px 20px; border-radius: 8px; font-size: 0.95rem; font-weight: 500;
+          cursor: pointer; transition: background 0.2s; border: none;
+          display: flex; align-items: center; gap: 8px;
         }
 
-        .btn-primary,
-        .btn-secondary {
-          padding: 0.625rem 1.25rem;
-          border-radius: 8px;
-          font-size: 0.95rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: background 0.2s;
-          border: none;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
+        .btn-primary { background: var(--accent-color); color: var(--bg-color); font-weight: 700; }
+        .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        .btn-primary {
-          background: #6366f1;
-          color: white;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-          background: #4f46e5;
-        }
-
-        .btn-primary:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .btn-secondary {
-          background: #f3f4f6;
-          color: #374151;
-        }
-
-        .btn-secondary:hover:not(:disabled) {
-          background: #e5e7eb;
-        }
+        .btn-secondary { background: rgba(255,255,255,0.05); color: var(--text-color); }
+        .btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
 
         .spinner-small {
-          width: 14px;
-          height: 14px;
-          border: 2px solid rgba(255,255,255,0.3);
-          border-top-color: white;
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
+          width: 14px; height: 14px;
+          border: 2px solid rgba(0,0,0,0.3); border-top-color: var(--bg-color);
+          border-radius: 50%; animation: spin 0.8s linear infinite;
         }
 
         .keyboard-hint {
-          text-align: center;
-          padding: 0.75rem;
-          font-size: 0.8rem;
-          color: #9ca3af;
-          border-top: 1px solid #e5e7eb;
+          text-align: center; padding: 12px; font-size: 0.8rem;
+          color: var(--text-secondary); border-top: 1px solid rgba(255,255,255,0.05);
         }
 
         .keyboard-hint kbd {
-          background: #f3f4f6;
-          padding: 0.125rem 0.375rem;
-          border-radius: 4px;
-          font-family: monospace;
-          font-size: 0.75rem;
-        }
-
-        /* Dark mode */
-        .dark-mode .quick-save-modal {
-          background: #1f2937;
-        }
-
-        .dark-mode .modal-header,
-        .dark-mode .modal-tabs,
-        .dark-mode .keyboard-hint {
-          border-color: #374151;
-        }
-
-        .dark-mode .modal-header h2,
-        .dark-mode .form-group label {
-          color: #f3f4f9;
-        }
-
-        .dark-mode .close-btn,
-        .dark-mode .modal-tabs .tab {
-          color: #9ca3af;
-        }
-
-        .dark-mode .modal-tabs .tab:hover {
-          background: #374151;
-        }
-
-        .dark-mode .modal-tabs .tab.active {
-          color: #818cf8;
-          border-color: #818cf8;
-        }
-
-        .dark-mode .form-group input,
-        .dark-mode .form-group textarea {
-          background: #374151;
-          border-color: #4b5563;
-          color: #f3f4f9;
-        }
-
-        .dark-mode .form-group input:focus,
-        .dark-mode .form-group textarea:focus {
-          border-color: #818cf8;
-        }
-
-        .dark-mode .form-hint {
-          color: #9ca3af;
-        }
-
-        .dark-mode .btn-secondary {
-          background: #374151;
-          color: #e5e7eb;
-        }
-
-        .dark-mode .btn-secondary:hover:not(:disabled) {
-          background: #4b5563;
-        }
-
-        .dark-mode .keyboard-hint kbd {
-          background: #374151;
+          background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;
+          font-family: var(--font-mono); font-size: 10px; color: var(--text-color);
         }
       `}</style>
     </div>

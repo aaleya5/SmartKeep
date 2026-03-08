@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { documentAPI, contentAPI, collectionAPI } from './services/api';
 import ErrorBoundary from './components/ErrorBoundary';
+import Landing from './components/Landing';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Library from './components/Library';
@@ -472,62 +474,67 @@ function App() {
 
   const renderAddView = () => (
     <div className="add-content-view">
-      <h2>Add New Content</h2>
+      <h2 style={{ borderBottom: '4px solid', paddingBottom: '1rem', marginBottom: '2rem', fontSize: '2.5rem' }}>INGEST CONTENT</h2>
       
       <div className="add-options">
-        <div className="add-option">
-          <h3>From URL</h3>
+        <div className="add-option config-panel">
+          <h3 style={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>/// OUTBOUND FETCH</h3>
           <form onSubmit={handleURLSubmit}>
             <div className="form-group">
-              <label htmlFor="url">Enter URL:</label>
+              <label htmlFor="url">TARGET_URL:</label>
               <input
                 type="url"
                 id="url"
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="https://example.com/article"
+                placeholder="https://..."
                 required
                 disabled={isLoading}
+                style={{ fontFamily: 'monospace', padding: '1.5rem', fontSize: '1.25rem' }}
               />
             </div>
-            <button type="submit" className="btn primary" disabled={isLoading}>
-              {isLoading ? <><span className="spinner-small"></span> Fetching...</> : 'Fetch Content'}
+            <button type="submit" className="btn primary" disabled={isLoading} style={{ width: '100%', padding: '1.5rem', fontSize: '1.25rem' }}>
+              {isLoading ? <><span className="spinner-small"></span> EXECUTING...</> : 'INITIATE EXTRACTION'}
             </button>
           </form>
-          <p className="form-hint">Content will be automatically enriched with AI summary, tags, and readability analysis.</p>
+          <p className="form-hint" style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--text-color)', color: 'var(--bg-color)', fontWeight: 'bold' }}>
+            &gt; Content will be pushed to the enrichment pipeline automatically.
+          </p>
         </div>
 
-        <div className="divider">OR</div>
+        <div className="divider" style={{ opacity: 0 }}></div>
 
-        <div className="add-option">
-          <h3>Manual Entry</h3>
+        <div className="add-option config-panel">
+          <h3 style={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>/// DIRECT INPUT</h3>
           <form onSubmit={handleManualSubmit}>
             <div className="form-group">
-              <label htmlFor="title">Title:</label>
+              <label htmlFor="title">SYS.TITLE:</label>
               <input
                 type="text"
                 id="title"
                 value={manualTitle}
                 onChange={(e) => setManualTitle(e.target.value)}
-                placeholder="Enter document title"
+                placeholder="IDENTIFIER..."
                 required
                 disabled={isLoading}
+                style={{ fontFamily: 'monospace' }}
               />
             </div>
             <div className="form-group">
-              <label htmlFor="content">Content:</label>
+              <label htmlFor="content">RAW.PAYLOAD:</label>
               <textarea
                 id="content"
                 value={manualContent}
                 onChange={(e) => setManualContent(e.target.value)}
-                placeholder="Enter document content..."
-                rows={6}
+                placeholder="CONTENT_BLOB..."
+                rows={8}
                 required
                 disabled={isLoading}
+                style={{ fontFamily: 'monospace' }}
               />
             </div>
-            <button type="submit" className="btn primary" disabled={isLoading}>
-              {isLoading ? <><span className="spinner-small"></span> Saving...</> : 'Save Document'}
+            <button type="submit" className="btn primary" disabled={isLoading} style={{ width: '100%' }}>
+              {isLoading ? <><span className="spinner-small"></span> COMMITTING...</> : 'COMMIT_RECORD'}
             </button>
           </form>
         </div>
@@ -537,73 +544,79 @@ function App() {
 
   return (
     <ErrorBoundary>
-      {showOnboarding && !isLoadingOnboarding ? (
-        <OnboardingFlow onComplete={handleOnboardingComplete} />
-      ) : (
-        <>
-          {/* Offline Banner */}
-          <OfflineBanner />
-          
-          <Layout
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
-            documents={documents}
-            isDarkMode={isDarkMode}
-            onToggleDarkMode={toggleDarkMode}
-            onSearch={handleSearch}
-            onOpenSettings={() => setCurrentPage('settings')}
-          >
-            <div className={`app ${isDarkMode ? 'dark-mode' : ''}`}>
-              {/* Keyboard shortcut hints */}
-              <div className="keyboard-hints">
-                <span><kbd>S</kbd> Quick Save</span>
-                <span><kbd>F</kbd> Search</span>
-              </div>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        
+        <Route path="/app/*" element={
+          showOnboarding && !isLoadingOnboarding ? (
+            <OnboardingFlow onComplete={handleOnboardingComplete} />
+          ) : (
+            <>
+              {/* Offline Banner */}
+              <OfflineBanner />
               
-              {/* Alerts */}
-              {error && (
-                <div className="alert error">
-                  {error}
-                  <button onClick={() => setError(null)} className="close-btn">×</button>
+              <Layout
+                currentPage={currentPage}
+                onNavigate={handleNavigate}
+                documents={documents}
+                isDarkMode={isDarkMode}
+                onToggleDarkMode={toggleDarkMode}
+                onSearch={handleSearch}
+                onOpenSettings={() => setCurrentPage('settings')}
+              >
+                <div className={`app ${isDarkMode ? 'dark-mode' : ''}`}>
+                  {/* Keyboard shortcut hints */}
+                  <div className="keyboard-hints">
+                    <span><kbd>S</kbd> Quick Save</span>
+                    <span><kbd>F</kbd> Search</span>
+                  </div>
+                  
+                  {/* Alerts */}
+                  {error && (
+                    <div className="alert error">
+                      {error}
+                      <button onClick={() => setError(null)} className="close-btn">×</button>
+                    </div>
+                  )}
+                  
+                  {successMessage && (
+                    <div className="alert success">
+                      {successMessage}
+                      <button onClick={() => setSuccessMessage(null)} className="close-btn">×</button>
+                    </div>
+                  )}
+
+                  {/* Main Content */}
+                  <div className="main-content">
+                    {renderContent()}
+                  </div>
                 </div>
-              )}
-              
-              {successMessage && (
-                <div className="alert success">
-                  {successMessage}
-                  <button onClick={() => setSuccessMessage(null)} className="close-btn">×</button>
-                </div>
-              )}
 
-              {/* Main Content */}
-              <div className="main-content">
-                {renderContent()}
-              </div>
-            </div>
+                {/* Add to Collection Modal */}
+                <AddToCollectionModal
+                  isOpen={showAddToCollection}
+                  onClose={() => {
+                    setShowAddToCollection(false);
+                    setSelectedDocumentForCollection(null);
+                  }}
+                  documentId={selectedDocumentForCollection}
+                  documentTitle={documents.find(d => d.id === selectedDocumentForCollection)?.title}
+                  onSuccess={() => {
+                    fetchDocuments(selectedCollection);
+                  }}
+                />
 
-            {/* Add to Collection Modal */}
-            <AddToCollectionModal
-              isOpen={showAddToCollection}
-              onClose={() => {
-                setShowAddToCollection(false);
-                setSelectedDocumentForCollection(null);
-              }}
-              documentId={selectedDocumentForCollection}
-              documentTitle={documents.find(d => d.id === selectedDocumentForCollection)?.title}
-              onSuccess={() => {
-                fetchDocuments(selectedCollection);
-              }}
-            />
-
-            {/* Quick Save Modal */}
-            <QuickSaveModal
-              isOpen={showQuickSave}
-              onClose={() => setShowQuickSave(false)}
-              onSave={handleQuickSave}
-            />
-          </Layout>
-        </>
-      )}
+                {/* Quick Save Modal */}
+                <QuickSaveModal
+                  isOpen={showQuickSave}
+                  onClose={() => setShowQuickSave(false)}
+                  onSave={handleQuickSave}
+                />
+              </Layout>
+            </>
+          )
+        } />
+      </Routes>
     </ErrorBoundary>
   );
 }

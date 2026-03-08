@@ -217,177 +217,103 @@ function AddToCollectionModal({
       <style>{`
         .modal-overlay {
           position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          display: flex; align-items: center; justify-content: center;
           z-index: 1000;
         }
+        
         .modal-content {
-          background: white;
-          border-radius: 8px;
-          width: 90%;
-          max-width: 400px;
-          max-height: 80vh;
-          overflow-y: auto;
+          background: var(--card-bg);
+          border: 1px solid var(--border-color);
+          border-radius: var(--border-radius-lg);
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+          width: 90%; max-width: 420px;
+          max-height: 85vh; overflow-y: auto;
+          color: var(--text-color);
         }
+
         .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 16px;
-          border-bottom: 1px solid #e5e7eb;
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.05);
         }
-        .modal-header h3 {
-          margin: 0;
-        }
+        
+        .modal-header h3 { margin: 0; font-size: 1.25rem; }
+
         .close-btn {
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-          color: #6b7280;
+          background: transparent; border: none;
+          font-size: 1.5rem; cursor: pointer; color: var(--text-secondary);
+          transition: color 0.2s;
         }
-        .modal-body {
-          padding: 16px;
-        }
+        .close-btn:hover { color: var(--text-color); }
+
+        .modal-body { padding: 24px; }
+
         .document-title {
-          color: #6b7280;
-          font-size: 0.9rem;
-          margin-bottom: 16px;
+          color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 24px;
+          padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px;
         }
+
         .alert.error {
-          background: #fee2e2;
-          color: #dc2626;
-          padding: 8px 12px;
-          border-radius: 4px;
-          margin-bottom: 12px;
-          font-size: 0.9rem;
+          background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);
+          padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9rem;
         }
+
         .collections-checklist {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          margin-bottom: 16px;
+          display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px;
         }
+
         .collection-checkbox {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px;
-          border-radius: 4px;
-          cursor: pointer;
-          transition: background 0.2s;
+          display: flex; align-items: center; gap: 12px;
+          padding: 12px; border-radius: 8px; border: 1px solid transparent;
+          cursor: pointer; transition: all 0.2s;
         }
-        .collection-checkbox:hover {
-          background: #f3f4f6;
-        }
+        .collection-checkbox:hover { background: rgba(255,255,255,0.03); }
         .collection-checkbox.selected {
-          background: #e0e7ff;
+          background: rgba(245, 200, 66, 0.1); border-color: rgba(245, 200, 66, 0.3);
         }
-        .collection-color {
-          width: 12px;
-          height: 12px;
-          border-radius: 3px;
-        }
-        .collection-icon {
-          font-size: 1rem;
-        }
-        .collection-name {
-          flex: 1;
-        }
-        .collection-count {
-          color: #9ca3af;
-          font-size: 0.85rem;
-        }
-        .create-new-btn {
-          width: 100%;
-        }
-        .create-form {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
+
+        .collection-color { width: 12px; height: 12px; border-radius: 50%; }
+        .collection-icon { font-size: 1.1rem; }
+        .collection-name { flex: 1; font-family: var(--font-sans); font-weight: 500; font-size: 14px; }
+        .collection-count { color: var(--text-secondary); font-size: 0.85rem; font-family: var(--font-mono); }
+        
+        input[type="checkbox"] { accent-color: var(--accent-color); }
+
+        .create-new-btn { width: 100%; border-style: dashed; }
+
+        .create-form { display: flex; flex-direction: column; gap: 16px; }
+        
         .create-form input {
-          padding: 8px;
-          border: 1px solid #d1d5db;
-          border-radius: 4px;
-          font-size: 0.9rem;
+          padding: 12px; background: rgba(0,0,0,0.2);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          color: var(--text-color); font-size: 0.95rem; outline: none; transition: all 0.2s;
         }
-        .color-picker, .icon-picker {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
+        .create-form input:focus { border-color: var(--accent-color); box-shadow: 0 0 0 2px rgba(245, 200, 66, 0.1); }
+
+        .color-picker { display: flex; gap: 8px; flex-wrap: wrap; }
         .color-option {
-          width: 24px;
-          height: 24px;
-          border-radius: 4px;
-          border: 2px solid transparent;
-          cursor: pointer;
+          width: 24px; height: 24px; border-radius: 50%;
+          border: 2px solid transparent; cursor: pointer; transition: transform 0.2s;
         }
-        .color-option.selected {
-          border-color: #1f2937;
-        }
+        .color-option:hover { transform: scale(1.1); }
+        .color-option.selected { border-color: white; box-shadow: 0 0 0 2px var(--accent-color); }
+
+        .icon-picker { display: flex; gap: 8px; flex-wrap: wrap; }
         .icon-option {
-          width: 28px;
-          height: 28px;
-          border: none;
-          background: transparent;
-          cursor: pointer;
-          font-size: 1rem;
-          border-radius: 4px;
+          width: 32px; height: 32px; border: none; background: transparent;
+          cursor: pointer; font-size: 1.1rem; border-radius: 8px; transition: background 0.2s;
         }
-        .icon-option.selected {
-          background: #e5e7eb;
-        }
-        .form-actions {
-          display: flex;
-          gap: 8px;
-        }
-        .btn {
-          padding: 8px 16px;
-          border-radius: 4px;
-          font-size: 0.9rem;
-          cursor: pointer;
-          border: none;
-        }
-        .btn-primary {
-          background: #6366f1;
-          color: white;
-        }
-        .btn-primary:hover {
-          background: #4f46e5;
-        }
-        .btn-primary:disabled {
-          background: #a5b4fc;
-        }
-        .btn-secondary {
-          background: #f3f4f6;
-          color: #374151;
-          border: 1px solid #d1d5db;
-        }
-        .btn-secondary:hover {
-          background: #e5e7eb;
-        }
-        .btn-sm {
-          padding: 6px 12px;
-          font-size: 0.85rem;
-        }
-        .empty-message {
-          color: #9ca3af;
-          text-align: center;
-          padding: 16px;
-        }
-        .loading {
-          text-align: center;
-          padding: 20px;
-          color: #9ca3af;
-        }
+        .icon-option:hover { background: rgba(255,255,255,0.05); }
+        .icon-option.selected { background: rgba(255,255,255,0.1); box-shadow: inset 0 0 0 1px var(--border-color); }
+
+        .form-actions { display: flex; gap: 12px; margin-top: 8px; }
+        .form-actions .btn { flex: 1; }
+        
+        .empty-message { color: var(--text-secondary); text-align: center; padding: 24px; }
+        .loading { text-align: center; padding: 32px; color: var(--text-secondary); font-family: var(--font-mono); }
       `}</style>
     </div>
   );

@@ -125,42 +125,26 @@ function Layout({
       {/* Global Styles */}
       <style>{`
         .app-layout {
-          --sidebar-width: 280px;
-          --bottom-nav-height: 64px;
-          --primary: #667eea;
-          --primary-hover: #5568d3;
-          --text-primary: #1f2937;
-          --text-secondary: #6b7280;
-          --sidebar-bg: #ffffff;
-          --sidebar-border: #e5e7eb;
-          --hover-bg: #f3f4f6;
-          --active-bg: #e0e7ff;
-          --search-bg: #f3f4f6;
-          --tag-bg: #f3f4f6;
-          --bottom-nav-bg: #ffffff;
-          --palette-bg: #ffffff;
-        }
-
-        .app-layout.dark-mode {
-          --sidebar-bg: #1f2937;
-          --sidebar-border: #374151;
-          --hover-bg: #374151;
-          --active-bg: #4f46e5;
-          --search-bg: #374151;
-          --tag-bg: #374151;
-          --bottom-nav-bg: #1f2937;
-          --palette-bg: #1f2937;
-          --text-primary: #f9fafb;
-          --text-secondary: #9ca3af;
+          --sidebar-width: 250px;
+          --bottom-nav-height: 80px;
+          --sidebar-bg: var(--nav-bg);
+          --sidebar-border: var(--border-color);
+          --hover-bg: var(--text-color);
+          --active-bg: var(--accent-color);
+          --search-bg: var(--bg-color);
+          --tag-bg: var(--bg-color);
+          --bottom-nav-bg: var(--nav-bg);
+          --palette-bg: var(--bg-color);
         }
 
         .main-content-area {
-          transition: margin-left 0.3s ease;
+          transition: margin-left 0.1s ease;
         }
 
         /* Responsive adjustments */
-        @media (max-width: 767px) {
+        @media (max-width: 900px) {
           .main-content-area {
+            margin-left: 0 !important;
             padding-bottom: calc(var(--bottom-nav-height) + 20px);
           }
         }

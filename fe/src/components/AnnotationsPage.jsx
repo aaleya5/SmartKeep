@@ -414,8 +414,9 @@ function AnnotationsPage({ onNavigate }) {
 
       <style>{`
         .annotations-page {
-          max-width: 100%;
-          padding: 1.5rem;
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 2rem;
         }
 
         /* Header */
@@ -423,49 +424,57 @@ function AnnotationsPage({ onNavigate }) {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 1.5rem;
+          margin-bottom: 2rem;
           flex-wrap: wrap;
           gap: 1rem;
         }
 
         .header-title {
           display: flex;
-          align-items: baseline;
-          gap: 1rem;
+          flex-direction: column;
+          gap: 0.5rem;
         }
 
         .header-title h1 {
           margin: 0;
-          font-size: 1.75rem;
-          color: #1f2937;
+          font-family: var(--font-serif);
+          font-size: 3.5rem;
+          color: #fff;
+          letter-spacing: -0.04em;
+          line-height: 1;
         }
 
         .annotation-count {
-          font-size: 0.9rem;
-          color: #6b7280;
+          font-family: var(--font-mono);
+          font-size: 13px;
+          color: var(--accent-color);
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
         }
 
         .export-btn {
-          padding: 0.6rem 1.25rem;
-          background: #10b981;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          font-size: 0.9rem;
+          padding: 12px 24px;
+          background: transparent;
+          color: var(--text-color);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 99px;
+          font-family: var(--font-sans);
+          font-size: 14px;
           font-weight: 500;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: all 0.2s;
           display: flex;
           align-items: center;
-          gap: 0.5rem;
+          gap: 8px;
         }
 
         .export-btn:hover:not(:disabled) {
-          background: #059669;
+          background: rgba(255,255,255,0.05);
+          color: #fff;
         }
 
         .export-btn:disabled {
-          background: #9ca3af;
+          opacity: 0.4;
           cursor: not-allowed;
         }
 
@@ -474,208 +483,201 @@ function AnnotationsPage({ onNavigate }) {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 1rem;
-          background: white;
-          border-radius: 12px;
-          margin-bottom: 1.5rem;
+          padding: 16px 24px;
+          background: rgba(255, 255, 255, 0.02);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255,255,255,0.05);
+          border-radius: 16px;
+          margin-bottom: 32px;
           flex-wrap: wrap;
-          gap: 0.75rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          gap: 16px;
         }
 
         .filters-left, .filters-right {
           display: flex;
-          gap: 0.5rem;
+          gap: 12px;
           flex-wrap: wrap;
           align-items: center;
         }
 
         .filter-select {
-          padding: 0.5rem 0.75rem;
-          border: 1px solid #e5e7eb;
+          padding: 8px 16px;
+          border: 1px solid rgba(255,255,255,0.1);
           border-radius: 8px;
-          font-size: 0.85rem;
-          background: white;
+          font-family: var(--font-sans);
+          font-size: 13px;
+          background: var(--bg-secondary);
+          color: #fff;
           cursor: pointer;
-          min-width: 120px;
+          min-width: 140px;
         }
 
         .filter-select:focus {
           outline: none;
-          border-color: #667eea;
+          border-color: var(--accent-color);
         }
 
         .sort-select {
-          min-width: 150px;
+          min-width: 160px;
         }
 
         .clear-filters-btn {
-          padding: 0.5rem 0.75rem;
-          background: #f3f4f6;
-          border: none;
+          padding: 8px 16px;
+          background: rgba(240, 112, 112, 0.1);
+          border: 1px solid rgba(240, 112, 112, 0.2);
           border-radius: 8px;
-          font-size: 0.8rem;
-          color: #6b7280;
+          font-size: 13px;
+          color: #f07070;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: all 0.2s;
         }
 
         .clear-filters-btn:hover {
-          background: #e5e7eb;
+          background: rgba(240, 112, 112, 0.15);
         }
 
         /* Loading State */
-        .loading-state {
+        .loading-state, .empty-state {
           display: flex;
           flex-direction: column;
           align-items: center;
-          padding: 4rem 2rem;
-          gap: 1rem;
-          color: #6b7280;
+          padding: 80px 32px;
+          gap: 16px;
+          color: var(--text-secondary);
+          background: rgba(255,255,255,0.01);
+          border: 1px dashed rgba(255,255,255,0.1);
+          border-radius: 24px;
         }
+
+        .empty-icon { font-size: 48px; opacity: 0.5; margin-bottom: 16px;}
+        .empty-state h3 { font-family: var(--font-serif); font-size: 24px; color: #fff; }
+        .empty-state p { font-size: 15px; color: var(--text-secondary); }
 
         /* Annotations List */
         .annotations-list {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+          gap: 24px;
         }
 
         /* Annotation Card */
         .annotation-card {
-          background: white;
-          border-radius: 12px;
-          padding: 1.25rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          background: rgba(255, 255, 255, 0.02);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          border-radius: 20px;
+          padding: 24px 24px 24px 48px;
           position: relative;
-          padding-left: 3rem;
-          transition: box-shadow 0.2s;
+          transition: all 0.3s ease;
         }
 
         .annotation-card:hover {
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+          background: rgba(255,255,255,0.03);
+          border-color: rgba(255,255,255,0.1);
+          transform: translateY(-2px);
         }
 
         .color-indicator {
           position: absolute;
-          left: 1rem;
-          top: 1.25rem;
-          width: 12px;
-          height: 12px;
+          left: 20px;
+          top: 30px;
+          width: 8px;
+          height: 8px;
           border-radius: 50%;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 0 10px currentColor;
         }
 
         .highlighted-text {
-          margin: 0 0 0.75rem;
-          padding: 0.75rem 1rem;
-          background: #f9fafb;
-          border-left: 3px solid #667eea;
-          border-radius: 0 8px 8px 0;
-          font-size: 0.95rem;
-          color: #374151;
+          margin: 0 0 16px;
+          padding-left: 16px;
+          border-left: 2px solid rgba(255,255,255,0.1);
+          font-family: var(--font-serif);
+          font-size: 18px;
+          color: #fff;
           line-height: 1.6;
           font-style: italic;
         }
 
         .annotation-note {
-          margin-bottom: 0.75rem;
-          font-size: 0.9rem;
-          color: #4b5563;
-          line-height: 1.5;
+          margin-bottom: 20px;
+          font-size: 14px;
+          color: #cbd5e1;
+          line-height: 1.6;
+          padding: 12px;
+          background: rgba(0,0,0,0.2);
+          border-radius: 8px;
         }
 
         .note-label {
-          font-weight: 600;
-          color: #6b7280;
+          font-family: var(--font-mono);
+          font-size: 11px;
+          color: var(--accent-color);
+          text-transform: uppercase;
+          margin-right: 8px;
+          letter-spacing: 0.05em;
         }
 
         .source-info {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
-          font-size: 0.85rem;
-          margin-bottom: 0.5rem;
+          gap: 8px;
+          font-size: 13px;
+          margin-bottom: 12px;
           flex-wrap: wrap;
         }
 
         .from-label {
-          color: #9ca3af;
-          font-weight: 500;
-        }
-
-        .source-favicon {
-          width: 16px;
-          height: 16px;
-          border-radius: 2px;
-        }
-
-        .source-favicon-placeholder {
-          font-size: 0.9rem;
+          font-family: var(--font-mono);
+          color: var(--text-secondary);
+          font-size: 10px;
+          text-transform: uppercase;
         }
 
         .source-title {
           background: none;
           border: none;
           padding: 0;
-          color: #667eea;
-          font-size: 0.85rem;
+          color: var(--accent-color);
+          font-size: 14px;
           cursor: pointer;
-          text-decoration: none;
+          font-family: var(--font-sans);
           font-weight: 500;
+          transition: 0.2s;
         }
 
         .source-title:hover {
-          text-decoration: underline;
+          color: #fff;
         }
 
         .source-domain {
-          color: #9ca3af;
-          font-size: 0.8rem;
+          color: var(--text-secondary);
+          font-size: 12px;
         }
 
         .annotation-tags {
           display: flex;
           flex-wrap: wrap;
-          gap: 0.35rem;
-          margin-bottom: 0.5rem;
+          gap: 8px;
+          margin-bottom: 16px;
         }
 
         .annotation-tags .tag {
-          font-size: 0.7rem;
-          padding: 0.2rem 0.5rem;
-          background: #e0e7ff;
-          color: #667eea;
-          border-radius: 12px;
+          font-family: var(--font-mono);
+          font-size: 11px;
+          padding: 4px 8px;
+          background: rgba(255,255,255,0.05);
+          color: var(--text-secondary);
+          border-radius: 6px;
+          border: 1px solid rgba(255,255,255,0.05);
         }
 
         .annotation-date {
-          font-size: 0.8rem;
-          color: #9ca3af;
-        }
-
-        /* Empty State */
-        .empty-state {
-          text-align: center;
-          padding: 4rem 2rem;
-          background: white;
-          border-radius: 12px;
-        }
-
-        .empty-icon {
-          font-size: 4rem;
-          margin-bottom: 1rem;
-        }
-
-        .empty-state h3 {
-          color: #374151;
-          margin-bottom: 0.5rem;
-        }
-
-        .empty-state p {
-          color: #6b7280;
-          max-width: 400px;
-          margin: 0 auto;
+          font-family: var(--font-mono);
+          font-size: 11px;
+          color: rgba(255,255,255,0.2);
+          text-align: right;
         }
 
         /* Pagination */
@@ -683,100 +685,42 @@ function AnnotationsPage({ onNavigate }) {
           display: flex;
           justify-content: center;
           align-items: center;
-          gap: 1rem;
-          margin-top: 2rem;
-          padding: 1rem;
+          gap: 24px;
+          margin-top: 48px;
         }
 
         .page-btn {
-          padding: 0.5rem 1rem;
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 8px;
-          font-size: 0.85rem;
-          color: #374151;
+          padding: 10px 20px;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 99px;
+          font-size: 13px;
+          color: #fff;
           cursor: pointer;
           transition: all 0.2s;
         }
 
         .page-btn:hover:not(:disabled) {
-          background: #f9fafb;
-          border-color: #667eea;
-          color: #667eea;
+          background: rgba(255,255,255,0.1);
         }
 
         .page-btn:disabled {
-          background: #f3f4f6;
-          color: #9ca3af;
+          opacity: 0.3;
           cursor: not-allowed;
         }
 
         .page-info {
-          font-size: 0.85rem;
-          color: #6b7280;
-        }
-
-        /* Dark mode support */
-        .app.dark-mode .header-title h1 {
-          color: #f3f4f6;
-        }
-
-        .app.dark-mode .annotation-count,
-        .app.dark-mode .note-label,
-        .app.dark-mode .from-label,
-        .app.dark-mode .source-domain,
-        .app.dark-mode .annotation-date,
-        .app.dark-mode .page-info {
-          color: #9ca3af;
-        }
-
-        .app.dark-mode .highlighted-text {
-          background: #374151;
-          color: #e5e7eb;
-        }
-
-        .app.dark-mode .annotation-note {
-          color: #d1d5db;
-        }
-
-        .app.dark-mode .source-title {
-          color: #a5b4fc;
-        }
-
-        .app.dark-mode .annotation-tags .tag {
-          background: #4f46e5;
-          color: #e0e7ff;
-        }
-
-        .app.dark-mode .filters-bar,
-        .app.dark-mode .annotation-card,
-        .app.dark-mode .empty-state,
-        .app.dark-mode .page-btn {
-          background: #1f2937;
-          border-color: #374151;
-        }
-
-        .app.dark-mode .filter-select {
-          background: #374151;
-          border-color: #4b5563;
-          color: #f3f4f6;
-        }
-
-        .app.dark-mode .clear-filters-btn {
-          background: #374151;
-          color: #9ca3af;
-        }
-
-        .app.dark-mode .clear-filters-btn:hover {
-          background: #4b5563;
+          font-family: var(--font-mono);
+          font-size: 12px;
+          color: var(--text-secondary);
         }
 
         /* Spinner */
         .spinner {
           width: 32px;
           height: 32px;
-          border: 3px solid #e5e7eb;
-          border-top-color: #667eea;
+          border: 2px solid rgba(255,255,255,0.1);
+          border-top-color: var(--accent-color);
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
         }
@@ -787,17 +731,10 @@ function AnnotationsPage({ onNavigate }) {
 
         /* Responsive */
         @media (max-width: 768px) {
-          .annotations-page {
-            padding: 1rem;
-          }
-
-          .annotations-header {
-            flex-direction: column;
-            align-items: flex-start;
-          }
-
-          .filters-bar {
-            flex-direction: column;
+          .annotations-page { padding: 16px; }
+          .annotations-list { grid-template-columns: 1fr; }
+          .header-title h1 { font-size: 2.5rem; }
+        }
             align-items: stretch;
           }
 

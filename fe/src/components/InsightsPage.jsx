@@ -212,13 +212,13 @@ function InsightsPage() {
           <p className="chart-subtitle">Daily saves with 7-day rolling average</p>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={formatSavesData()}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
               <XAxis 
                 dataKey="date" 
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: "rgba(255,255,255,0.5)" }}
                 interval="preserveStartEnd"
               />
-              <YAxis tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12, fill: "rgba(255,255,255,0.5)" }} />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
               <Line 
@@ -248,13 +248,13 @@ function InsightsPage() {
           <p className="chart-subtitle">Most saved content sources</p>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={topDomains.slice(0, 8)} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis type="number" tick={{ fontSize: 12 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis type="number" tick={{ fontSize: 12, fill: "rgba(255,255,255,0.5)" }} />
               <YAxis 
                 type="category" 
                 dataKey="label" 
                 width={100}
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: "rgba(255,255,255,0.5)" }}
               />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="value" fill="#667eea" radius={[0, 4, 4, 0]} name="Articles" />
@@ -295,13 +295,13 @@ function InsightsPage() {
           <p className="chart-subtitle">Article length distribution</p>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={formatReadingTimeData()}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
               <XAxis 
                 dataKey="bucket" 
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: "rgba(255,255,255,0.5)" }}
                 interval={0}
               />
-              <YAxis tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12, fill: "rgba(255,255,255,0.5)" }} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} name="Articles" />
             </BarChart>
@@ -314,16 +314,16 @@ function InsightsPage() {
           <p className="chart-subtitle">Content difficulty over time</p>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={formatDifficultyData()}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
               <XAxis 
                 dataKey="month" 
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: "rgba(255,255,255,0.5)" }}
                 tickFormatter={(val) => {
                   const date = new Date(val + '-01');
                   return date.toLocaleDateString('en-US', { month: 'short' });
                 }}
               />
-              <YAxis tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12, fill: "rgba(255,255,255,0.5)" }} />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
               <Bar dataKey="Easy" stackId="a" fill={DIFFICULTY_COLORS.easy} name="Easy" />
@@ -339,9 +339,9 @@ function InsightsPage() {
           <p className="chart-subtitle">Average saves by day of week</p>
           <ResponsiveContainer width="100%" height={300}>
             <RadarChart data={formatWeekdayData()}>
-              <PolarGrid stroke="#e5e7eb" />
-              <PolarAngleAxis dataKey="weekday" tick={{ fontSize: 12 }} />
-              <PolarRadiusAxis tick={{ fontSize: 10 }} />
+              <PolarGrid stroke="rgba(255,255,255,0.1)" />
+              <PolarAngleAxis dataKey="weekday" tick={{ fontSize: 12, fill: "rgba(255,255,255,0.5)" }} />
+              <PolarRadiusAxis tick={{ fontSize: 10, fill: "rgba(255,255,255,0.5)" }} />
               <Radar
                 name="Avg Saves"
                 dataKey="saves"
@@ -373,9 +373,9 @@ function InsightsPage() {
 
       <style>{`
         .insights-page {
-          max-width: 1400px;
+          max-width: 1200px;
           margin: 0 auto;
-          padding: 1.5rem;
+          padding: 2rem;
         }
 
         /* Header */
@@ -383,21 +383,26 @@ function InsightsPage() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 1.5rem;
+          margin-bottom: 2rem;
         }
 
         .insights-header h1 {
           margin: 0;
-          font-size: 1.75rem;
-          color: #1f2937;
+          font-family: var(--font-serif);
+          font-size: 3.5rem;
+          color: #fff;
+          letter-spacing: -0.04em;
+          line-height: 1;
         }
 
         .time-range-selector .filter-select {
-          padding: 0.5rem 1rem;
-          border: 1px solid #e5e7eb;
+          padding: 8px 16px;
+          border: 1px solid rgba(255,255,255,0.1);
           border-radius: 8px;
-          font-size: 0.9rem;
-          background: white;
+          font-family: var(--font-sans);
+          font-size: 13px;
+          background: rgba(255,255,255,0.05);
+          color: #fff;
           cursor: pointer;
         }
 
@@ -405,29 +410,38 @@ function InsightsPage() {
         .stats-cards {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-          gap: 1rem;
-          margin-bottom: 2rem;
+          gap: 24px;
+          margin-bottom: 32px;
         }
 
         .stat-card {
-          background: white;
-          border-radius: 12px;
-          padding: 1.25rem;
+          background: rgba(255, 255, 255, 0.02);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          border-radius: 20px;
+          padding: 24px;
           display: flex;
           align-items: center;
-          gap: 1rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          gap: 20px;
+          transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+          background: rgba(255,255,255,0.04);
+          transform: translateY(-2px);
         }
 
         .stat-icon {
-          font-size: 2rem;
-          width: 50px;
-          height: 50px;
+          font-size: 24px;
+          width: 48px;
+          height: 48px;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #f3f4f6;
+          background: rgba(245,200,66,0.1);
           border-radius: 12px;
+          color: var(--accent-color);
         }
 
         .stat-content {
@@ -435,36 +449,43 @@ function InsightsPage() {
         }
 
         .stat-value {
-          font-size: 1.75rem;
-          font-weight: 700;
-          color: #1f2937;
-          line-height: 1.2;
+          font-family: var(--font-serif);
+          font-size: 32px;
+          font-weight: 500;
+          color: #fff;
+          line-height: 1;
+          margin-bottom: 4px;
         }
 
         .stat-title {
-          font-size: 0.85rem;
-          color: #6b7280;
-          font-weight: 500;
+          font-family: var(--font-mono);
+          font-size: 11px;
+          color: var(--text-secondary);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
 
         .stat-subtitle {
-          font-size: 0.75rem;
-          color: #9ca3af;
+          font-size: 12px;
+          color: rgba(255,255,255,0.3);
+          margin-top: 2px;
         }
 
         /* Charts Grid */
         .charts-grid {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
-          gap: 1.5rem;
-          margin-bottom: 2rem;
+          gap: 24px;
+          margin-bottom: 32px;
         }
 
         .chart-card {
-          background: white;
-          border-radius: 12px;
-          padding: 1.25rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          background: rgba(255, 255, 255, 0.02);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          border-radius: 20px;
+          padding: 32px;
         }
 
         .chart-card.chart-wide {
@@ -472,44 +493,52 @@ function InsightsPage() {
         }
 
         .chart-card h3 {
-          margin: 0 0 0.25rem;
-          font-size: 1.1rem;
-          color: #1f2937;
+          margin: 0 0 4px;
+          font-family: var(--font-sans);
+          font-size: 18px;
+          color: #fff;
         }
 
         .chart-subtitle {
-          margin: 0 0 1rem;
-          font-size: 0.8rem;
-          color: #9ca3af;
+          margin: 0 0 24px;
+          font-family: var(--font-mono);
+          font-size: 11px;
+          color: var(--text-secondary);
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
         }
 
         /* Quick Stats */
         .quick-stats {
           display: flex;
           justify-content: center;
-          gap: 3rem;
-          padding: 1.5rem;
-          background: white;
-          border-radius: 12px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          gap: 48px;
+          padding: 24px;
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px dashed rgba(255, 255, 255, 0.1);
+          border-radius: 20px;
           flex-wrap: wrap;
         }
 
         .quick-stat {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
+          gap: 12px;
         }
 
         .quick-stat-label {
-          font-size: 0.9rem;
-          color: #6b7280;
+          font-family: var(--font-mono);
+          font-size: 11px;
+          color: var(--text-secondary);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
 
         .quick-stat-value {
-          font-size: 0.95rem;
-          font-weight: 600;
-          color: #1f2937;
+          font-family: var(--font-serif);
+          font-size: 18px;
+          color: var(--accent-color);
+          font-style: italic;
         }
 
         /* Loading */
@@ -517,16 +546,16 @@ function InsightsPage() {
           display: flex;
           flex-direction: column;
           align-items: center;
-          padding: 4rem 2rem;
-          gap: 1rem;
-          color: #6b7280;
+          padding: 80px 32px;
+          gap: 16px;
+          color: var(--text-secondary);
         }
 
         .spinner {
           width: 32px;
           height: 32px;
-          border: 3px solid #e5e7eb;
-          border-top-color: #667eea;
+          border: 2px solid rgba(255,255,255,0.1);
+          border-top-color: var(--accent-color);
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
         }
@@ -537,89 +566,40 @@ function InsightsPage() {
 
         /* Tooltip */
         .chart-tooltip {
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 8px;
-          padding: 0.75rem;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          background: rgba(8, 10, 15, 0.9);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 12px;
+          padding: 16px;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         }
 
         .tooltip-label {
-          font-weight: 600;
-          margin: 0 0 0.5rem;
-          color: #374151;
+          font-family: var(--font-mono);
+          font-size: 11px;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          color: var(--text-secondary);
+          margin: 0 0 8px;
         }
 
         .chart-tooltip p {
           margin: 0;
-          font-size: 0.85rem;
-        }
-
-        /* Dark mode */
-        .app.dark-mode .insights-header h1,
-        .app.dark-mode .stat-value,
-        .app.dark-mode .chart-card h3,
-        .app.dark-mode .quick-stat-value {
-          color: #f3f4f6;
-        }
-
-        .app.dark-mode .stat-title,
-        .app.dark-mode .chart-subtitle,
-        .app.dark-mode .quick-stat-label {
-          color: #9ca3af;
-        }
-
-        .app.dark-mode .stats-cards,
-        .app.dark-mode .chart-card,
-        .app.dark-mode .quick-stats {
-          background: #1f2937;
-          border-color: #374151;
-        }
-
-        .app.dark-mode .time-range-selector .filter-select {
-          background: #374151;
-          border-color: #4b5563;
-          color: #f3f4f6;
-        }
-
-        .app.dark-mode .stat-icon {
-          background: #374151;
-        }
-
-        .app.dark-mode .chart-tooltip {
-          background: #1f2937;
-          border-color: #374151;
-        }
-
-        .app.dark-mode .tooltip-label {
-          color: #f3f4f6;
+          font-family: var(--font-sans);
+          font-size: 14px;
         }
 
         /* Responsive */
         @media (max-width: 1024px) {
-          .charts-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .chart-card.chart-wide {
-            grid-column: span 1;
-          }
+          .charts-grid { grid-template-columns: 1fr; }
+          .chart-card.chart-wide { grid-column: span 1; }
         }
 
         @media (max-width: 768px) {
-          .insights-page {
-            padding: 1rem;
-          }
-
-          .stats-cards {
-            grid-template-columns: repeat(2, 1fr);
-          }
-
-          .quick-stats {
-            flex-direction: column;
-            align-items: center;
-            gap: 0.75rem;
-          }
+          .insights-page { padding: 16px; }
+          .insights-header h1 { font-size: 2.5rem; }
+          .stats-cards { grid-template-columns: 1fr; }
+          .quick-stats { flex-direction: column; align-items: center; gap: 16px; }
         }
       `}</style>
     </div>
