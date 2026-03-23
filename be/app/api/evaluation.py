@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 from app.db.session import get_db
-from app.services.search_service import SearchService
+from app.services.content_search_service import ContentSearchService
 from app.evaluation.metrics import SearchEvaluator, precision_at_k, recall_at_k
 
 router = APIRouter()
@@ -46,17 +46,17 @@ def evaluate_search(
         evaluator = SearchEvaluator()
         
         # Get search service
-        service = SearchService(db, model=model)
+        service = ContentSearchService(db)
         
         for item in request.queries:
             query = item.query
             relevant_ids = set(item.relevant_ids)
             
             # Get search results
-            result = service.search(query, top_k=k)
+            result = service.search(query, mode='keyword', limit=k)
             
             # Extract retrieved document IDs
-            retrieved_ids = [doc.id for doc, score in result["results"]]
+            retrieved_ids = [item['id'] for item in result['items']]
             
             # Add to evaluator
             evaluator.add_result(query, retrieved_ids, relevant_ids)
@@ -100,11 +100,11 @@ def evaluate_precision(
             raise HTTPException(status_code=400, detail="At least one relevant_id is required.")
         
         # Get search results
-        service = SearchService(db, model=model)
-        result = service.search(query, top_k=k)
+        service = ContentSearchService(db)
+        result = service.search(query, mode='keyword', limit=k)
         
         # Extract retrieved document IDs
-        retrieved_ids = [doc.id for doc, score in result["results"]]
+        retrieved_ids = [item['id'] for item in result['items']]
         
         # Calculate metrics
         precision = precision_at_k(retrieved_ids, relevant, k)
