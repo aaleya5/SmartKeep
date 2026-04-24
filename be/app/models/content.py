@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime, Index, Boolean, Float, CheckConstraint, Integer
+from sqlalchemy import Column, String, Text, DateTime, Index, Boolean, Float, CheckConstraint, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import TSVECTOR, UUID, ARRAY
 from sqlalchemy.types import TypeDecorator, TEXT
 from sqlalchemy.sql import func
@@ -60,6 +60,10 @@ class Content(Base):
     is_read = Column(Boolean, nullable=False, server_default='false')
     last_opened_at = Column(DateTime(timezone=True), nullable=True)
     
+    # Ownership
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    owner = relationship("User", back_populates="contents")
+
     # FTS
     search_vector = Column(TSVECTOR, nullable=True)
     

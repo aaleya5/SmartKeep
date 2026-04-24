@@ -15,7 +15,6 @@ import ExplorePage from './components/ExplorePage';
 import AnnotationsPage from './components/AnnotationsPage';
 import InsightsPage from './components/InsightsPage';
 import SettingsPage from './components/SettingsPage';
-import OnboardingFlow from './components/OnboardingFlow';
 import QuickSaveModal from './components/QuickSaveModal';
 import OfflineBanner from './components/common/OfflineBanner';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
@@ -60,10 +59,6 @@ function App() {
   // Dark mode state
   const [isDarkMode, setIsDarkMode] = useState(false);
   
-  // Onboarding state
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [isLoadingOnboarding, setIsLoadingOnboarding] = useState(true);
-
   // Keyboard shortcuts
   useKeyboardShortcuts({
     's': () => setShowQuickSave(true),
@@ -82,7 +77,6 @@ function App() {
   useEffect(() => {
     fetchDocuments();
     fetchCollections();
-    checkOnboardingStatus();
   }, []);
   
   const fetchCollections = async () => {
@@ -95,28 +89,7 @@ function App() {
     }
   };
   
-  const checkOnboardingStatus = () => {
-    // Check if user has any documents or if onboarding was already completed
-    const onboardingComplete = localStorage.getItem('smartkeep_onboarding_complete');
-    
-    // For now, we'll show onboarding if it hasn't been completed
-    // In a real app, you might also check if there are any documents
-    if (!onboardingComplete) {
-      // Small delay to ensure app is loaded
-      setTimeout(() => {
-        setShowOnboarding(true);
-        setIsLoadingOnboarding(false);
-      }, 500);
-    } else {
-      setIsLoadingOnboarding(false);
-    }
-  };
-  
-  const handleOnboardingComplete = () => {
-    setShowOnboarding(false);
-    // Refresh documents after onboarding
-    fetchDocuments();
-  };
+
 
   const fetchDocuments = async (collectionId = null) => {
     setIsLoading(true);
@@ -548,14 +521,11 @@ function App() {
         <Route path="/" element={<Landing />} />
         
         <Route path="/app/*" element={
-          showOnboarding && !isLoadingOnboarding ? (
-            <OnboardingFlow onComplete={handleOnboardingComplete} />
-          ) : (
-            <>
-              {/* Offline Banner */}
-              <OfflineBanner />
-              
-              <Layout
+          <>
+            {/* Offline Banner */}
+            <OfflineBanner />
+            
+            <Layout
                 currentPage={currentPage}
                 onNavigate={handleNavigate}
                 documents={documents}
@@ -563,8 +533,8 @@ function App() {
                 onToggleDarkMode={toggleDarkMode}
                 onSearch={handleSearch}
                 onOpenSettings={() => setCurrentPage('settings')}
-              >
-                <div className={`app ${isDarkMode ? 'dark-mode' : ''}`}>
+            >
+              <div className={`app ${isDarkMode ? 'dark-mode' : ''}`}>
                   {/* Keyboard shortcut hints */}
                   <div className="keyboard-hints">
                     <span><kbd>S</kbd> Quick Save</span>
@@ -586,14 +556,14 @@ function App() {
                     </div>
                   )}
 
-                  {/* Main Content */}
-                  <div className="main-content">
-                    {renderContent()}
-                  </div>
+                {/* Main Content */}
+                <div className="main-content">
+                  {renderContent()}
                 </div>
+              </div>
 
                 {/* Add to Collection Modal */}
-                <AddToCollectionModal
+              <AddToCollectionModal
                   isOpen={showAddToCollection}
                   onClose={() => {
                     setShowAddToCollection(false);
@@ -604,17 +574,16 @@ function App() {
                   onSuccess={() => {
                     fetchDocuments(selectedCollection);
                   }}
-                />
+              />
 
-                {/* Quick Save Modal */}
-                <QuickSaveModal
-                  isOpen={showQuickSave}
-                  onClose={() => setShowQuickSave(false)}
-                  onSave={handleQuickSave}
-                />
-              </Layout>
-            </>
-          )
+              {/* Quick Save Modal */}
+              <QuickSaveModal
+                isOpen={showQuickSave}
+                onClose={() => setShowQuickSave(false)}
+                onSave={handleQuickSave}
+              />
+            </Layout>
+          </>
         } />
       </Routes>
     </ErrorBoundary>

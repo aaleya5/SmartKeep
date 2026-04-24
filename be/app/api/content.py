@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.models.user import User
+from app.api.auth import get_current_user
 from app.schemas.content import (
     ContentCreate,
     ContentManualCreate,
@@ -34,7 +36,7 @@ router = APIRouter(prefix="/content", tags=["Content"])
 
 
 @router.post("", response_model=ContentResponse, status_code=status.HTTP_201_CREATED)
-def create_from_url(request: ContentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def create_from_url(request: ContentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Create content from URL.
     
@@ -48,7 +50,7 @@ def create_from_url(request: ContentCreate, background_tasks: BackgroundTasks, d
     Errors: 409 if duplicate, 422 if invalid URL, 502 if unreachable
     """
     try:
-        return ContentService.create_from_url(db, str(request.url), background_tasks)
+        return ContentService.create_from_url(db, str(request.url), str(current_user.id), background_tasks)
     except DuplicateURLError as e:
         raise HTTPException(
             status_code=409,
@@ -66,7 +68,7 @@ def create_from_url(request: ContentCreate, background_tasks: BackgroundTasks, d
 
 
 @router.post("/manual", response_model=ContentResponse, status_code=status.HTTP_201_CREATED)
-def create_manual(request: ContentManualCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def create_manual(request: ContentManualCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Create content manually (skip scraping).
     
@@ -81,6 +83,7 @@ def create_manual(request: ContentManualCreate, background_tasks: BackgroundTask
             db,
             title=request.title,
             body=request.body,
+            owner_id=str(current_user.id),
             source_url=str(request.source_url) if request.source_url else None,
             tags=request.tags,
             notes=request.notes,
@@ -107,6 +110,7 @@ def get_content_list(
     enrichment_status: Optional[EnrichmentStatusEnum] = Query(None, description="Enrichment status"),
     is_truncated: Optional[bool] = Query(None, description="Filter by truncation status"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get list of content with filtering and pagination.
@@ -133,6 +137,7 @@ def get_content_list(
         
         items, total = ContentService.get_list(
             db,
+            owner_id=str(current_user.id),
             page=page,
             page_size=page_size,
             sort=sort.value,
@@ -166,21 +171,21 @@ def get_content_list(
 
 
 @router.get("/{content_id}", response_model=ContentResponse)
-def get_content(content_id: UUID, db: Session = Depends(get_db)):
+def get_content(content_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Get content by ID.
     
     Also updates last_opened_at = NOW() via side-effect UPDATE.
     Returns 200 ContentResponse or 404 if not found.
     """
-    content = ContentService.get_by_id(db, content_id)
+    content = ContentService.get_by_id(db, content_id, str(current_user.id))
     if not content:
         raise HTTPException(status_code=404, detail=f"Content {content_id} not found")
     return content
 
 
 @router.put("/{content_id}", response_model=ContentResponse)
-def update_content(content_id: UUID, request: ContentUpdate, db: Session = Depends(get_db)):
+def update_content(content_id: UUID, request: ContentUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Update content (partial update - PATCH semantics).
     
@@ -190,13 +195,13 @@ def update_content(content_id: UUID, request: ContentUpdate, db: Session = Depen
     try:
         # Filter out None values
         updates = {k: v for k, v in request.model_dump().items() if v is not None}
-        return ContentService.update(db, content_id, updates)
+        return ContentService.update(db, content_id, str(current_user.id), updates)
     except ContentNotFoundError:
         raise HTTPException(status_code=404, detail=f"Content {content_id} not found")
 
 
 @router.delete("/{content_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_content(content_id: UUID, db: Session = Depends(get_db)):
+def delete_content(content_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Delete content.
     
@@ -204,25 +209,25 @@ def delete_content(content_id: UUID, db: Session = Depends(get_db)):
     Returns 204 No Content or 404 if not found.
     """
     try:
-        ContentService.delete(db, content_id)
+        ContentService.delete(db, content_id, str(current_user.id))
     except ContentNotFoundError:
         raise HTTPException(status_code=404, detail=f"Content {content_id} not found")
 
 
 @router.delete("/bulk", response_model=BulkDeleteResponse)
-def bulk_delete_content(request: BulkDeleteRequest, db: Session = Depends(get_db)):
+def bulk_delete_content(request: BulkDeleteRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Bulk delete content.
     
     Body: BulkDeleteRequest with content_ids
     Returns 200 { "deleted_count": n }
     """
-    deleted_count = ContentService.bulk_delete(db, request.content_ids)
+    deleted_count = ContentService.bulk_delete(db, str(current_user.id), request.content_ids)
     return BulkDeleteResponse(deleted_count=deleted_count)
 
 
 @router.post("/{content_id}/enrich", response_model=EnrichQueuedResponse, status_code=status.HTTP_202_ACCEPTED)
-def enrich_content(content_id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def enrich_content(content_id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Re-trigger background enrichment task.
     
@@ -231,7 +236,7 @@ def enrich_content(content_id: UUID, background_tasks: BackgroundTasks, db: Sess
     Returns 202 { "message": "Enrichment queued", "content_id": "..." }
     """
     try:
-        ContentService.trigger_enrichment(db, content_id, background_tasks)
+        ContentService.trigger_enrichment(db, content_id, str(current_user.id), background_tasks)
         return EnrichQueuedResponse(
             message="Enrichment queued",
             content_id=content_id,
@@ -241,7 +246,7 @@ def enrich_content(content_id: UUID, background_tasks: BackgroundTasks, db: Sess
 
 
 @router.post("/{content_id}/accept-tags", response_model=ContentResponse)
-def accept_tags(content_id: UUID, request: AcceptTagsRequest, db: Session = Depends(get_db)):
+def accept_tags(content_id: UUID, request: AcceptTagsRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Accept suggested tags.
     
@@ -250,13 +255,13 @@ def accept_tags(content_id: UUID, request: AcceptTagsRequest, db: Session = Depe
     Returns 200 ContentResponse
     """
     try:
-        return ContentService.accept_tags(db, content_id, request.tags)
+        return ContentService.accept_tags(db, content_id, str(current_user.id), request.tags)
     except ContentNotFoundError:
         raise HTTPException(status_code=404, detail=f"Content {content_id} not found")
 
 
 @router.patch("/bulk/tags", response_model=BulkTagsResponse)
-def bulk_update_tags(request: BulkTagsUpdate, db: Session = Depends(get_db)):
+def bulk_update_tags(request: BulkTagsUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Bulk update tags.
     
@@ -266,6 +271,7 @@ def bulk_update_tags(request: BulkTagsUpdate, db: Session = Depends(get_db)):
     """
     updated_count = ContentService.bulk_update_tags(
         db,
+        str(current_user.id),
         request.content_ids,
         request.tags_to_add,
         request.tags_to_remove,
@@ -274,7 +280,7 @@ def bulk_update_tags(request: BulkTagsUpdate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{content_id}/progress", response_model=ProgressUpdateResponse)
-def update_reading_progress(content_id: UUID, request: ProgressUpdateRequest, db: Session = Depends(get_db)):
+def update_reading_progress(content_id: UUID, request: ProgressUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Update reading progress.
     
@@ -284,7 +290,7 @@ def update_reading_progress(content_id: UUID, request: ProgressUpdateRequest, db
     """
     try:
         reading_progress, is_read = ContentService.update_reading_progress(
-            db, content_id, request.reading_progress
+            db, content_id, str(current_user.id), request.reading_progress
         )
         return ProgressUpdateResponse(
             reading_progress=reading_progress,

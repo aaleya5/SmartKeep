@@ -16,3 +16,7 @@ httpx
 pytest-asyncio
 sentence-transformers
 groq
+python-jose[cryptography]
+passlib[bcrypt]
+email-validator
+python-multipart

@@ -31,9 +31,9 @@ class ContentNotFoundError(Exception):
 class ContentService:
 
     @staticmethod
-    def create_from_url(db: Session, url: str, background_tasks: BackgroundTasks = None) -> Content:
+    def create_from_url(db: Session, url: str, owner_id: str, background_tasks: BackgroundTasks = None) -> Content:
         # Check for duplicate URL
-        existing = db.query(Content).filter(Content.source_url == url).first()
+        existing = db.query(Content).filter(Content.source_url == url, Content.user_id == owner_id).first()
         if existing:
             raise DuplicateURLError(
                 f"URL '{url}' has already been saved.",
@@ -92,6 +92,7 @@ class ContentService:
             difficulty=difficulty,
             reading_progress=0.0,
             is_read=False,
+            user_id=owner_id,
         )
         
         try:
@@ -112,7 +113,7 @@ class ContentService:
         return content
 
     @staticmethod
-    def create_manual(db: Session, title: str, body: str, source_url: Optional[str] = None, 
+    def create_manual(db: Session, title: str, body: str, owner_id: str, source_url: Optional[str] = None, 
                      tags: List[str] = None, notes: str = None, background_tasks: BackgroundTasks = None) -> Content:
         # Calculate word count
         word_count = len(body.split()) if body else 0
@@ -159,6 +160,7 @@ class ContentService:
             difficulty=difficulty,
             reading_progress=0.0,
             is_read=False,
+            user_id=owner_id,
         )
         
         db.add(content)
@@ -174,8 +176,8 @@ class ContentService:
         return content
 
     @staticmethod
-    def get_by_id(db: Session, content_id: UUID) -> Optional[Content]:
-        content = db.query(Content).filter(Content.id == content_id).first()
+    def get_by_id(db: Session, content_id: UUID, owner_id: str) -> Optional[Content]:
+        content = db.query(Content).filter(Content.id == content_id, Content.user_id == owner_id).first()
         if content:
             # Update last_opened_at
             content.last_opened_at = datetime.utcnow()
@@ -186,6 +188,7 @@ class ContentService:
     @staticmethod
     def get_list(
         db: Session,
+        owner_id: str,
         page: int = 1,
         page_size: int = 20,
         sort: str = "newest",
@@ -200,7 +203,7 @@ class ContentService:
         enrichment_status: Optional[str] = None,
         is_truncated: Optional[bool] = None,
     ) -> Tuple[List[Content], int]:
-        query = db.query(Content)
+        query = db.query(Content).filter(Content.user_id == owner_id)
         
         # Apply filters
         if tags:
@@ -262,8 +265,8 @@ class ContentService:
         return items, total
 
     @staticmethod
-    def update(db: Session, content_id: UUID, updates: dict) -> Content:
-        content = db.query(Content).filter(Content.id == content_id).first()
+    def update(db: Session, content_id: UUID, owner_id: str, updates: dict) -> Content:
+        content = db.query(Content).filter(Content.id == content_id, Content.user_id == owner_id).first()
         if not content:
             raise ContentNotFoundError(f"Content {content_id} not found")
         
@@ -278,8 +281,8 @@ class ContentService:
         return content
 
     @staticmethod
-    def delete(db: Session, content_id: UUID) -> bool:
-        content = db.query(Content).filter(Content.id == content_id).first()
+    def delete(db: Session, content_id: UUID, owner_id: str) -> bool:
+        content = db.query(Content).filter(Content.id == content_id, Content.user_id == owner_id).first()
         if not content:
             raise ContentNotFoundError(f"Content {content_id} not found")
         
@@ -288,14 +291,14 @@ class ContentService:
         return True
 
     @staticmethod
-    def bulk_delete(db: Session, content_ids: List[UUID]) -> int:
-        deleted_count = db.query(Content).filter(Content.id.in_(content_ids)).delete(synchronize_session=False)
+    def bulk_delete(db: Session, owner_id: str, content_ids: List[UUID]) -> int:
+        deleted_count = db.query(Content).filter(Content.user_id == owner_id, Content.id.in_(content_ids)).delete(synchronize_session=False)
         db.commit()
         return deleted_count
 
     @staticmethod
-    def trigger_enrichment(db: Session, content_id: UUID, background_tasks: BackgroundTasks = None) -> Content:
-        content = db.query(Content).filter(Content.id == content_id).first()
+    def trigger_enrichment(db: Session, content_id: UUID, owner_id: str, background_tasks: BackgroundTasks = None) -> Content:
+        content = db.query(Content).filter(Content.id == content_id, Content.user_id == owner_id).first()
         if not content:
             raise ContentNotFoundError(f"Content {content_id} not found")
         
@@ -313,8 +316,8 @@ class ContentService:
         return content
 
     @staticmethod
-    def accept_tags(db: Session, content_id: UUID, tags: List[str]) -> Content:
-        content = db.query(Content).filter(Content.id == content_id).first()
+    def accept_tags(db: Session, content_id: UUID, owner_id: str, tags: List[str]) -> Content:
+        content = db.query(Content).filter(Content.id == content_id, Content.user_id == owner_id).first()
         if not content:
             raise ContentNotFoundError(f"Content {content_id} not found")
         
@@ -335,12 +338,12 @@ class ContentService:
         return content
 
     @staticmethod
-    def bulk_update_tags(db: Session, content_ids: List[UUID], tags_to_add: List[str], 
+    def bulk_update_tags(db: Session, owner_id: str, content_ids: List[UUID], tags_to_add: List[str], 
                         tags_to_remove: List[str]) -> int:
         updated_count = 0
         
         for content_id in content_ids:
-            content = db.query(Content).filter(Content.id == content_id).first()
+            content = db.query(Content).filter(Content.id == content_id, Content.user_id == owner_id).first()
             if content:
                 current_tags = set(content.tags or [])
                 
@@ -358,8 +361,8 @@ class ContentService:
         return updated_count
 
     @staticmethod
-    def update_reading_progress(db: Session, content_id: UUID, reading_progress: float) -> Tuple[float, bool]:
-        content = db.query(Content).filter(Content.id == content_id).first()
+    def update_reading_progress(db: Session, content_id: UUID, owner_id: str, reading_progress: float) -> Tuple[float, bool]:
+        content = db.query(Content).filter(Content.id == content_id, Content.user_id == owner_id).first()
         if not content:
             raise ContentNotFoundError(f"Content {content_id} not found")
         

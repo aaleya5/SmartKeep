@@ -13,6 +13,8 @@ from typing import List, Optional
 from uuid import UUID
 
 from app.db.session import get_db
+from app.models.user import User
+from app.api.auth import get_current_user
 from app.schemas.collection import (
     CollectionCreate,
     CollectionUpdate,
@@ -31,7 +33,7 @@ router = APIRouter(prefix="/collections", tags=["Collections"])
 
 
 @router.post("", response_model=CollectionResponse, status_code=status.HTTP_201_CREATED)
-def create_collection(request: CollectionCreate, db: Session = Depends(get_db)):
+def create_collection(request: CollectionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Create a new collection.
     
@@ -43,6 +45,7 @@ def create_collection(request: CollectionCreate, db: Session = Depends(get_db)):
     """
     collection = collection_service.create_collection(
         db=db,
+        owner_id=str(current_user.id),
         name=request.name,
         description=request.description,
         color=request.color,
@@ -69,7 +72,8 @@ def create_collection(request: CollectionCreate, db: Session = Depends(get_db)):
 def list_collections(
     include_empty: bool = Query(True, description="Include collections with no content"),
     sort: str = Query("newest", enum=["name", "newest", "item_count", "manual"], description="Sort order"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     List all collections with content counts and preview images.
@@ -80,7 +84,8 @@ def list_collections(
     Note: Pinned collections always sort first regardless of sort param
     """
     collections = collection_service.list_collections(
-        db, 
+        db,
+        owner_id=str(current_user.id),
         include_empty=include_empty,
         sort=sort
     )
@@ -111,20 +116,21 @@ def list_collections(
 @router.get("/{collection_id}", response_model=CollectionResponse)
 def get_collection(
     collection_id: UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get a single collection with its item count and preview images.
     """
-    collection = collection_service.get_collection(db, collection_id)
+    collection = collection_service.get_collection(db, collection_id, str(current_user.id))
     if not collection:
         raise HTTPException(
             status_code=404,
             detail=f"Collection {collection_id} not found"
         )
     
-    item_count = collection_service.get_collection_content_count(db, collection_id)
-    preview_images = collection_service.get_collection_preview_images(db, collection_id)
+    item_count = collection_service.get_collection_content_count(db, collection_id, str(current_user.id))
+    preview_images = collection_service.get_collection_preview_images(db, collection_id, owner_id=str(current_user.id))
     
     return CollectionResponse(
         id=collection.id,
@@ -145,7 +151,8 @@ def get_collection(
 def update_collection(
     collection_id: UUID,
     request: CollectionUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Update a collection's details.
@@ -154,6 +161,7 @@ def update_collection(
     
     collection = collection_service.update_collection(
         db=db,
+        owner_id=str(current_user.id),
         collection_id=collection_id,
         **update_data
     )
@@ -164,8 +172,8 @@ def update_collection(
             detail=f"Collection {collection_id} not found"
         )
     
-    item_count = collection_service.get_collection_content_count(db, collection_id)
-    preview_images = collection_service.get_collection_preview_images(db, collection_id)
+    item_count = collection_service.get_collection_content_count(db, collection_id, str(current_user.id))
+    preview_images = collection_service.get_collection_preview_images(db, collection_id, owner_id=str(current_user.id))
     
     return CollectionResponse(
         id=collection.id,
@@ -183,13 +191,13 @@ def update_collection(
 
 
 @router.delete("/{collection_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_collection(collection_id: UUID, db: Session = Depends(get_db)):
+def delete_collection(collection_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Delete a collection.
     
     Does NOT delete the content items (only removes memberships).
     """
-    success = collection_service.delete_collection(db, collection_id)
+    success = collection_service.delete_collection(db, str(current_user.id), collection_id)
     
     if not success:
         raise HTTPException(
@@ -206,7 +214,8 @@ def get_collection_content(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     sort: str = Query("newest", enum=["newest", "oldest", "last_opened", "reading_time_asc", "reading_time_desc", "alpha_asc", "alpha_desc"], description="Sort order"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get content in a collection.
@@ -214,7 +223,7 @@ def get_collection_content(
     Same pagination/sort/filter params as GET /content, scoped to the collection.
     """
     # Verify collection exists
-    collection = collection_service.get_collection(db, collection_id)
+    collection = collection_service.get_collection(db, collection_id, str(current_user.id))
     if not collection:
         raise HTTPException(
             status_code=404,
@@ -223,15 +232,16 @@ def get_collection_content(
     
     # Get content in collection
     content_items = collection_service.get_content_in_collection(
-        db, 
-        collection_id,
+        db,
+        owner_id=str(current_user.id),
+        collection_id=collection_id,
         limit=page_size,
         offset=(page - 1) * page_size,
         sort=sort
     )
     
     # Get total count
-    total = collection_service.get_collection_content_count(db, collection_id)
+    total = collection_service.get_collection_content_count(db, collection_id, str(current_user.id))
     
     # Convert to response format
     from app.schemas.content import ContentResponse
@@ -278,7 +288,8 @@ def get_collection_content(
 def add_content_to_collection(
     collection_id: UUID,
     request: AddToCollectionRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Add content to a collection.
@@ -288,12 +299,13 @@ def add_content_to_collection(
     """
     result = collection_service.add_content_to_collection_bulk(
         db=db,
+        owner_id=str(current_user.id),
         collection_id=collection_id,
         content_ids=request.content_ids
     )
     
     # Check if collection exists
-    collection = collection_service.get_collection(db, collection_id)
+    collection = collection_service.get_collection(db, collection_id, str(current_user.id))
     if not collection:
         raise HTTPException(
             status_code=404,
@@ -310,13 +322,15 @@ def add_content_to_collection(
 def remove_content_from_collection(
     collection_id: UUID,
     content_id: UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Remove content from a collection.
     """
     success = collection_service.remove_content_from_collection(
         db=db,
+        owner_id=str(current_user.id),
         collection_id=collection_id,
         content_id=content_id
     )
@@ -333,7 +347,8 @@ def remove_content_from_collection(
 @router.put("/reorder", status_code=status.HTTP_200_OK)
 def reorder_collections(
     request: CollectionReorderRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Reorder collections.
@@ -343,6 +358,7 @@ def reorder_collections(
     """
     updated_count = collection_service.reorder_collections(
         db=db,
+        owner_id=str(current_user.id),
         ordered_ids=request.ordered_ids
     )
     
@@ -350,26 +366,26 @@ def reorder_collections(
 
 
 @router.get("/content/{content_id}", response_model=List[CollectionResponse])
-def get_collections_for_content(content_id: UUID, db: Session = Depends(get_db)):
+def get_collections_for_content(content_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Get all collections that contain specific content.
     """
     from app.models.content import Content
     
     # Verify content exists
-    content = db.query(Content).filter(Content.id == content_id).first()
+    content = db.query(Content).filter(Content.id == content_id, Content.user_id == str(current_user.id)).first()
     if not content:
         raise HTTPException(
             status_code=404,
             detail=f"Content {content_id} not found"
         )
     
-    collections = collection_service.get_collections_for_content(db, content_id)
+    collections = collection_service.get_collections_for_content(db, str(current_user.id), content_id)
     
     result = []
     for c in collections:
-        item_count = collection_service.get_collection_content_count(db, c.id)
-        preview_images = collection_service.get_collection_preview_images(db, c.id)
+        item_count = collection_service.get_collection_content_count(db, c.id, str(current_user.id))
+        preview_images = collection_service.get_collection_preview_images(db, c.id, owner_id=str(current_user.id))
         
         result.append(CollectionResponse(
             id=c.id,

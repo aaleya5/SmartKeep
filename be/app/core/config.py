@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS: int = 500
     LLM_TEMPERATURE: float = 0.3
 
+    # JWT Authentication Configuration
+    JWT_SECRET_KEY: SecretStr = SecretStr("smartkeep-dev-secret")
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
     class Config:
         env_file = ".env"
 
