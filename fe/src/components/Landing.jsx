@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { authAPI } from "../services/api";
 import './Landing.css';
 
 /* ─── FLIM.AI STYLE FLOATING UI SHARDS ──────────────────────────
@@ -18,7 +19,35 @@ export default function Landing() {
   const ringRef = useRef(null);
   const [url, setUrl] = useState("");
   const [saved, setSaved] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState('login'); // 'login' or 'register'
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [passwordWarning, setPasswordWarning] = useState('');
   const navigate = useNavigate();
+
+  // Check password length as user types and prevent exceeding 72 bytes
+  const handlePasswordChange = (e) => {
+    let newPassword = e.target.value;
+    const passwordBytes = new TextEncoder().encode(newPassword).length;
+    
+    // If password exceeds 72 bytes, truncate it
+    if (passwordBytes > 72) {
+      // Truncate character by character until we're under 72 bytes
+      while (new TextEncoder().encode(newPassword).length > 72 && newPassword.length > 0) {
+        newPassword = newPassword.slice(0, -1);
+      }
+      setPasswordWarning('Password truncated to 72 bytes maximum');
+    } else if (passwordBytes > 60) {
+      setPasswordWarning(`Password length: ${passwordBytes} bytes (max 72)`);
+    } else {
+      setPasswordWarning('');
+    }
+    
+    setPassword(newPassword);
+  };
 
   useEffect(() => {
     const mv = e => {
@@ -28,6 +57,48 @@ export default function Landing() {
     window.addEventListener("mousemove", mv);
     return () => window.removeEventListener("mousemove", mv);
   }, []);
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    
+    // Validate email
+    if (!email || !email.includes('@')) {
+      setError('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
+    
+    // Validate password
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters');
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      let response;
+      if (authMode === 'login') {
+        response = await authAPI.login(email, password);
+      } else {
+        response = await authAPI.register(email, password);
+      }
+      
+      // Save token to localStorage
+      localStorage.setItem('smartkeep_auth_token', response.data.access_token);
+      setShowAuthModal(false);
+      setEmail('');
+      setPassword('');
+      setPasswordWarning('');
+      navigate('/app');
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.response?.data?.message || 'Authentication failed';
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const doSave = () => {
     if (!url.trim()) {
@@ -56,8 +127,65 @@ export default function Landing() {
           <li><a href="#how">how_it_works</a></li>
           <li><a href="https://github.com" style={{ color: "var(--amber)" }}>github ↗</a></li>
         </ul>
-        <button onClick={() => navigate('/app')} className="nav-cta border-none cursor-pointer">Open App →</button>
+        <button onClick={() => setShowAuthModal(true)} className="nav-cta border-none cursor-pointer">Open App →</button>
       </nav>
+
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <div className="auth-modal-overlay" onClick={() => setShowAuthModal(false)}>
+          <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="close-btn" onClick={() => setShowAuthModal(false)}>×</button>
+            <h2>{authMode === 'login' ? 'Login' : 'Register'}</h2>
+            
+            <form onSubmit={handleAuth}>
+              <div className="form-group">
+                <label htmlFor="email">Email</label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  required
+                  disabled={loading}
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="password">Password</label>
+                <input
+                  type="password"
+                  id="password"
+                  value={password}
+                  onChange={handlePasswordChange}
+                  placeholder="••••••••"
+                  required
+                  disabled={loading}
+                />
+                {passwordWarning && <div className="password-warning">{passwordWarning}</div>}
+              </div>
+              
+              {error && <div className="auth-error">{error}</div>}
+              
+              <button type="submit" disabled={loading} className="btn primary" style={{ width: '100%' }}>
+                {loading ? 'Loading...' : (authMode === 'login' ? 'Login' : 'Register')}
+              </button>
+            </form>
+            
+            <div className="auth-toggle">
+              {authMode === 'login' ? (
+                <>
+                  Don't have an account? <button onClick={() => { setAuthMode('register'); setError(''); }} className="link-btn">Register</button>
+                </>
+              ) : (
+                <>
+                  Already have an account? <button onClick={() => { setAuthMode('login'); setError(''); }} className="link-btn">Login</button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── HERO WITH FLOATING UI SHARDS (FLIM.AI STYLE) ── */}
       <section className="strips-hero">
@@ -133,7 +261,7 @@ export default function Landing() {
             by <strong>meaning</strong> — not just keywords.
           </p>
           <div className="hero-btns">
-            <button onClick={() => navigate('/app')} className="btn-a cursor-pointer border-none">Enter App →</button>
+            <button onClick={() => setShowAuthModal(true)} className="btn-a cursor-pointer border-none">Enter App →</button>
             <a href="#reader" className="btn-b"><span>↓</span> See it in action</a>
           </div>
         </div>

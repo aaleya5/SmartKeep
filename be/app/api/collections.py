@@ -73,7 +73,7 @@ def list_collections(
     include_empty: bool = Query(True, description="Include collections with no content"),
     sort: str = Query("newest", enum=["name", "newest", "item_count", "manual"], description="Sort order"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user, use_cache=False)
 ):
     """
     List all collections with content counts and preview images.

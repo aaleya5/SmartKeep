@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Grid, List, Filter } from 'lucide-react';
+import { Grid, List, Filter, Book } from 'lucide-react';
 
 function Library({
   documents = [],

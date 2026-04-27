@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { documentAPI, contentAPI, collectionAPI } from './services/api';
+import { authAPI, documentAPI, contentAPI, collectionAPI } from './services/api';
 import ErrorBoundary from './components/ErrorBoundary';
 import Landing from './components/Landing';
 import Layout from './components/Layout';
@@ -21,6 +21,10 @@ import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 import './App.css';
 
 function App() {
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  
   // Current page/view state
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [currentPageParams, setCurrentPageParams] = useState(null);
@@ -59,6 +63,33 @@ function App() {
   // Dark mode state
   const [isDarkMode, setIsDarkMode] = useState(false);
   
+  // Check authentication on app load and when triggered
+  const checkAuth = async () => {
+    try {
+      const token = localStorage.getItem('smartkeep_auth_token');
+      if (token) {
+        // Try to fetch current user to verify token is valid
+        await authAPI.me();
+        setIsAuthenticated(true);
+        fetchDocuments();
+        fetchCollections();
+      } else {
+        setIsAuthenticated(false);
+      }
+    } catch (err) {
+      console.error('Auth check failed:', err);
+      setIsAuthenticated(false);
+      localStorage.removeItem('smartkeep_auth_token');
+      localStorage.removeItem('smartkeep_user');
+    } finally {
+      setIsCheckingAuth(false);
+    }
+  };
+  
+  useEffect(() => {
+    checkAuth();
+  }, []);
+  
   // Keyboard shortcuts
   useKeyboardShortcuts({
     's': () => setShowQuickSave(true),
@@ -73,11 +104,6 @@ function App() {
       }
     },
   }, { enabled: true, ignoreInputKeys: [] });
-
-  useEffect(() => {
-    fetchDocuments();
-    fetchCollections();
-  }, []);
   
   const fetchCollections = async () => {
     try {
@@ -515,12 +541,23 @@ function App() {
     </div>
   );
 
+  // Show loading spinner while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="auth-loading">
+        <div className="spinner"></div>
+        <span>Loading...</span>
+      </div>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <Routes>
-        <Route path="/" element={<Landing />} />
+        <Route path="/" element={isAuthenticated ? <Navigate to="/app" replace /> : <Landing />} />
         
         <Route path="/app/*" element={
+          !isAuthenticated ? <Navigate to="/" replace /> : (
           <>
             {/* Offline Banner */}
             <OfflineBanner />
@@ -584,6 +621,7 @@ function App() {
               />
             </Layout>
           </>
+          )
         } />
       </Routes>
     </ErrorBoundary>

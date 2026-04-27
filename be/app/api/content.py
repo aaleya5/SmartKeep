@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
+from typing import Optional
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.user import User
@@ -110,7 +111,7 @@ def get_content_list(
     enrichment_status: Optional[EnrichmentStatusEnum] = Query(None, description="Enrichment status"),
     is_truncated: Optional[bool] = Query(None, description="Filter by truncation status"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user, use_cache=False),
 ):
     """
     Get list of content with filtering and pagination.
@@ -171,14 +172,15 @@ def get_content_list(
 
 
 @router.get("/{content_id}", response_model=ContentResponse)
-def get_content(content_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_content(content_id: UUID, db: Session = Depends(get_db), current_user: Optional[User] = Depends(get_current_user, use_cache=False)):
     """
     Get content by ID.
     
     Also updates last_opened_at = NOW() via side-effect UPDATE.
     Returns 200 ContentResponse or 404 if not found.
     """
-    content = ContentService.get_by_id(db, content_id, str(current_user.id))
+    owner_id = str(current_user.id) if current_user else None
+    content = ContentService.get_by_id(db, content_id, owner_id)
     if not content:
         raise HTTPException(status_code=404, detail=f"Content {content_id} not found")
     return content
