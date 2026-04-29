@@ -7,26 +7,26 @@ import KnowledgeGraph from './KnowledgeGraph';
 // Knowledge Gaps Component
 function KnowledgeGaps({ onSearch }) {
   // AI-generated knowledge gap suggestions based on common learning patterns
-  const gaps = [
-    { topic: 'Advanced patterns', suggestion: 'design patterns advanced', reason: 'You have many beginner resources' },
-    { topic: 'System design', suggestion: 'system architecture scalable', reason: 'Frequently saving architecture content' },
-    { topic: 'Performance optimization', suggestion: 'performance optimization react', reason: 'High activity in frontend development' },
-  ];
+  const gaps = [];
 
   return (
     <div className="knowledge-gaps">
       <h3 className="section-title">Knowledge Gaps</h3>
       <p className="section-subtitle">Topics you're building knowledge in but might need deeper dives</p>
-      <div className="gaps-grid">
-        {gaps.map((gap, idx) => (
-          <div key={idx} className="gap-card" onClick={() => onSearch(gap.suggestion)}>
-            <div className="gap-icon">🎯</div>
-            <h4>{gap.topic}</h4>
-            <p className="gap-reason">{gap.reason}</p>
-            <span className="gap-search">Search: "{gap.suggestion}" →</span>
-          </div>
-        ))}
-      </div>
+      {gaps.length === 0 ? (
+        <div className="empty-placeholder">Not enough data to suggest knowledge gaps yet.</div>
+      ) : (
+        <div className="gaps-grid">
+          {gaps.map((gap, idx) => (
+            <div key={idx} className="gap-card" onClick={() => onSearch(gap.suggestion)}>
+              <div className="gap-icon">🎯</div>
+              <h4>{gap.topic}</h4>
+              <p className="gap-reason">{gap.reason}</p>
+              <span className="gap-search">Search: "{gap.suggestion}" →</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Grid, List, Filter, Book } from 'lucide-react';
+import { Grid, List, Filter, Book, ExternalLink } from 'lucide-react';
 
 function Library({
   documents = [],
@@ -82,16 +82,35 @@ function Library({
             >
               <div className="doc-topbar">
                 <span className="doc-domain">{doc.domain}</span>
-                {doc.difficulty_score && (
-                  <span className="doc-score">
-                    Complexity: {doc.difficulty_score}/100
-                  </span>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {doc.difficulty_score && (
+                    <span className="doc-score">
+                      Complexity: {doc.difficulty_score}/100
+                    </span>
+                  )}
+                  {doc.source_url && (
+                    <a 
+                      href={doc.source_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="external-link"
+                      title="Open Original Page"
+                    >
+                      <ExternalLink size={14} />
+                    </a>
+                  )}
+                </div>
               </div>
               
               <h3 className="doc-title">{doc.title}</h3>
               {viewMode === 'grid' && (
-                <p className="doc-preview">{doc.summary || "Content extracted and indexed. Semantic analysis active."}</p>
+                <p className="doc-preview">
+                  {doc.summary || 
+                    (doc.enrichment_status === 'processing' ? 'AI analysis in progress...' : 
+                     doc.enrichment_status === 'failed' ? 'AI analysis unavailable for this content.' : 
+                     'Content extracted and indexed.')}
+                </p>
               )}
               
               <div className="doc-bottombar">
@@ -289,10 +308,21 @@ function Library({
         }
 
         .doc-topbar {
-          display: flex; 
-          justify-content: space-between; 
+          display: flex;
+          justify-content: space-between;
           align-items: center;
-          margin-bottom: 16px; 
+          margin-bottom: 12px;
+        }
+
+        .external-link {
+          color: var(--text-secondary);
+          transition: color 0.2s;
+          display: flex;
+          align-items: center;
+        }
+
+        .external-link:hover {
+          color: var(--accent-color);
         }
 
         .library-grid.list .doc-topbar {

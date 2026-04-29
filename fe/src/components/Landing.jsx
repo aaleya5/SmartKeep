@@ -78,22 +78,46 @@ export default function Landing() {
     }
     
     try {
-      let response;
+      let token;
       if (authMode === 'login') {
-        response = await authAPI.login(email, password);
+        const response = await authAPI.login(email, password);
+        token = response.data.access_token;
       } else {
-        response = await authAPI.register(email, password);
+        // Register the user
+        await authAPI.register(email, password);
+        // Login immediately after successful registration
+        const response = await authAPI.login(email, password);
+        token = response.data.access_token;
       }
       
       // Save token to localStorage
-      localStorage.setItem('smartkeep_auth_token', response.data.access_token);
+      localStorage.setItem('smartkeep_auth_token', token);
       setShowAuthModal(false);
       setEmail('');
       setPassword('');
       setPasswordWarning('');
-      navigate('/app');
+      // Use window.location to force App.jsx to remount and check auth state
+      window.location.href = '/app';
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || err.response?.data?.message || 'Authentication failed';
+      let errorMsg = 'Authentication failed';
+      const detail = err.response?.data?.detail;
+      if (err.userMessage) {
+        errorMsg = err.userMessage;
+      } else if (detail) {
+        if (typeof detail === 'string') {
+          errorMsg = detail;
+        } else if (Array.isArray(detail) && detail.length > 0 && detail[0].msg) {
+          errorMsg = detail[0].msg;
+        } else if (typeof detail === 'object' && detail.message) {
+          errorMsg = detail.message;
+        } else {
+          errorMsg = JSON.stringify(detail);
+        }
+      } else if (err.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
       setError(errorMsg);
     } finally {
       setLoading(false);

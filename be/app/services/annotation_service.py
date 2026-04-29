@@ -106,6 +106,7 @@ class AnnotationService:
     @staticmethod
     def list_annotations(
         db: Session,
+        owner_id: str,
         color: Optional[str] = None,
         content_tags: Optional[List[str]] = None,
         domain: Optional[str] = None,
@@ -120,6 +121,9 @@ class AnnotationService:
         
         # Build query with joins
         query = db.query(Annotation).join(Content, Annotation.content_id == Content.id)
+        
+        # Filter by owner_id
+        query = query.filter(Content.user_id == owner_id)
         
         # Apply filters
         if color:

@@ -45,7 +45,7 @@ function SortableCollectionCard({ collection, onClick, onEdit, onDelete, isNewCa
   const fetchRecentItems = async () => {
     if (!collection?.id) return;
     try {
-      const response = await collectionAPI.getRecentItems(collection.id, 3);
+      const response = await collectionAPI.getContent(collection.id, 1, 3, 'newest');
       setRecentItems(response.data.items || []);
     } catch (err) {
       console.error('Failed to fetch recent items:', err);

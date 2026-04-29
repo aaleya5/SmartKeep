@@ -71,8 +71,8 @@ function App() {
         // Try to fetch current user to verify token is valid
         await authAPI.me();
         setIsAuthenticated(true);
-        fetchDocuments();
-        fetchCollections();
+        // Await both so documents are loaded before isCheckingAuth becomes false
+        await Promise.all([fetchDocuments(), fetchCollections()]);
       } else {
         setIsAuthenticated(false);
       }
@@ -122,23 +122,25 @@ function App() {
     try {
       let response;
       if (collectionId) {
-        // Use getContent to fetch documents in a collection
         response = await collectionAPI.getContent(collectionId);
         setDocuments(response.data.items || []);
       } else {
         response = await documentAPI.getAll();
-        // Backend returns { items: [], total, page, page_size, has_next }
         const docs = response.data.items || [];
         setDocuments(docs);
         
         // Extract unique tags from all documents
         const tagsSet = new Set();
         docs.forEach(doc => {
+          if (doc.tags && Array.isArray(doc.tags)) {
+            doc.tags.forEach(tag => tagsSet.add(tag));
+          }
           if (doc.suggested_tags && Array.isArray(doc.suggested_tags)) {
             doc.suggested_tags.forEach(tag => tagsSet.add(tag));
           }
         });
         setAllTags(Array.from(tagsSet));
+        return docs;
       }
     } catch (err) {
       console.error(err);
@@ -148,24 +150,16 @@ function App() {
     }
   };
 
-  const handleNavigate = (page, options = {}) => {
+  const handleNavigate = (page, params = null) => {
     setCurrentPage(page);
-    setCurrentPageParams(options.selectedItem || null);
+    // Support both the old {selectedItem} pattern and direct params
+    setCurrentPageParams(params?.selectedItem !== undefined ? params.selectedItem : params);
     clearMessages();
     
-    // Refresh collections when navigating to library
-    if (page === 'library') {
+    // Refresh data when navigating to key pages
+    if (page === 'library' || page === 'dashboard') {
+      fetchDocuments();
       fetchCollections();
-    }
-    
-    // Handle navigation-specific logic
-    if (options.filterTag) {
-      // Filter by tag - could be implemented later
-      console.log('Filter by tag:', options.filterTag);
-    }
-    if (options.selectedItem) {
-      // Navigate to specific item - could be implemented later
-      console.log('Selected item:', options.selectedItem);
     }
   };
 
@@ -180,23 +174,39 @@ function App() {
     setShowAddToCollection(true);
   };
 
+  const extractErrorMessage = (err, defaultMessage) => {
+    const detail = err.response?.data?.detail;
+    if (detail) {
+      if (typeof detail === 'string') return detail;
+      if (typeof detail === 'object' && detail.message) return detail.message;
+      return JSON.stringify(detail);
+    }
+    return err.response?.data?.message || err.message || defaultMessage;
+  };
+
   const handleURLSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
     setError(null);
     setSuccessMessage(null);
     
     try {
       await contentAPI.createFromURL(urlInput);
-      setSuccessMessage('Document created from URL successfully! AI enrichment will complete shortly.');
+      setSuccessMessage('Document saved! AI enrichment will complete shortly.');
       setUrlInput('');
-      fetchDocuments();
-      setCurrentPage('documents');
+      await fetchDocuments();
+      setCurrentPage('library');
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || err.response?.data?.message || 'Failed to fetch URL content';
-      setError(errorMsg);
-    } finally {
-      setIsLoading(false);
+      const status = err.response?.status;
+      if (status === 409) {
+        // URL already exists — show it in the library
+        const detail = err.response?.data?.detail;
+        const title = typeof detail === 'object' ? detail.title : null;
+        setSuccessMessage(title ? `"${title}" is already in your library.` : 'This URL is already saved — showing your library.');
+        await fetchDocuments();
+        setCurrentPage('library');
+      } else {
+        setError(extractErrorMessage(err, 'Failed to fetch URL content'));
+      }
     }
   };
 
@@ -208,14 +218,13 @@ function App() {
     
     try {
       await contentAPI.createManual(manualTitle, manualContent);
-      setSuccessMessage('Document created successfully! AI enrichment will complete shortly.');
+      setSuccessMessage('Document saved! AI enrichment will complete shortly.');
       setManualTitle('');
       setManualContent('');
-      fetchDocuments();
-      setCurrentPage('documents');
+      await fetchDocuments();
+      setCurrentPage('library');
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || 'Failed to create document';
-      setError(errorMsg);
+      setError(extractErrorMessage(err, 'Failed to create document'));
     } finally {
       setIsLoading(false);
     }
@@ -229,15 +238,16 @@ function App() {
     try {
       if (data.url) {
         await contentAPI.createFromURL(data.url);
-        setSuccessMessage('Document created from URL successfully!');
+        setSuccessMessage('Document saved!');
       } else if (data.title && data.content) {
         await contentAPI.createManual(data.title, data.content);
-        setSuccessMessage('Document created successfully!');
+        setSuccessMessage('Document saved!');
       }
-      fetchDocuments();
+      await fetchDocuments();
+      setShowQuickSave(false);
+      setCurrentPage('library');
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || err.response?.data?.message || 'Failed to save';
-      setError(errorMsg);
+      setError(extractErrorMessage(err, 'Failed to save'));
       throw err; // Re-throw so the modal knows it failed
     } finally {
       setIsLoading(false);
@@ -257,7 +267,7 @@ function App() {
       setSuccessMessage('Enrichment triggered! This may take a moment.');
       fetchDocuments();
     } catch (err) {
-      setError('Failed to trigger enrichment: ' + (err.response?.data?.detail || err.message));
+      setError('Failed to trigger enrichment: ' + extractErrorMessage(err, 'Unknown error'));
     }
   };
 
@@ -315,7 +325,7 @@ function App() {
           <Dashboard
             documents={documents}
             onNavigate={handleNavigate}
-            onSelectDocument={(doc) => console.log('Selected:', doc)}
+            onSelectDocument={(doc) => handleNavigate('content-detail', { id: doc.id })}
           />
         );
       case 'library':
@@ -324,7 +334,7 @@ function App() {
             documents={documents}
             collections={collections}
             tags={allTags}
-            onSelectDocument={(doc) => console.log('Selected:', doc)}
+            onSelectDocument={(doc) => handleNavigate('content-detail', { id: doc.id })}
             onRefresh={fetchDocuments}
           />
         );
@@ -572,12 +582,6 @@ function App() {
                 onOpenSettings={() => setCurrentPage('settings')}
             >
               <div className={`app ${isDarkMode ? 'dark-mode' : ''}`}>
-                  {/* Keyboard shortcut hints */}
-                  <div className="keyboard-hints">
-                    <span><kbd>S</kbd> Quick Save</span>
-                    <span><kbd>F</kbd> Search</span>
-                  </div>
-                  
                   {/* Alerts */}
                   {error && (
                     <div className="alert error">

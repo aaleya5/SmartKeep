@@ -3,6 +3,11 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 from datetime import datetime
 import re
+import praw
+import logging
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class ContentScraper:
@@ -22,6 +27,41 @@ class ContentScraper:
         - author (optional)
         - published_at (optional)
         """
+        # Extract domain
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc
+        
+        # Check if this is a Reddit URL and if we have API credentials
+        if domain in ["reddit.com", "www.reddit.com", "old.reddit.com"] and settings.REDDIT_CLIENT_ID and settings.REDDIT_CLIENT_SECRET:
+            try:
+                reddit = praw.Reddit(
+                    client_id=settings.REDDIT_CLIENT_ID,
+                    client_secret=settings.REDDIT_CLIENT_SECRET.get_secret_value() if hasattr(settings.REDDIT_CLIENT_SECRET, 'get_secret_value') else settings.REDDIT_CLIENT_SECRET,
+                    user_agent="SmartKeep/1.0"
+                )
+                
+                # Extract submission ID from URL (e.g. https://www.reddit.com/r/python/comments/xyz/...)
+                post = reddit.submission(url=url)
+                
+                title = post.title
+                content = f"{post.title}\n\n{post.selftext}"
+                author = post.author.name if post.author else "[deleted]"
+                published_at = datetime.fromtimestamp(post.created_utc)
+                
+                return {
+                    "title": title or "Reddit Post",
+                    "content": content.strip(),
+                    "domain": domain,
+                    "source_url": url,
+                    "og_image_url": getattr(post, 'url', None) if getattr(post, 'url', None) and not post.is_self else None,
+                    "favicon_url": "https://www.redditstatic.com/desktop2x/img/favicon/favicon-32x32.png",
+                    "author": author,
+                    "published_at": published_at,
+                }
+            except Exception as e:
+                logger.error(f"Failed to scrape Reddit using PRAW: {e}. Falling back to standard scraper.")
+        
+        # Standard scraping flow for non-Reddit or fallback
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -32,10 +72,6 @@ class ContentScraper:
             raise ValueError(f"Unable to fetch URL: {str(e)}")
 
         soup = BeautifulSoup(response.text, "html.parser")
-        
-        # Extract domain
-        parsed_url = urlparse(url)
-        domain = parsed_url.netloc
         
         # Extract title
         title = None

@@ -288,6 +288,19 @@ function ReadingPane({ content, annotations, onCreateAnnotation, onSelectAnnotat
 
   // Render content with highlights
   const renderContentWithHighlights = () => {
+    if (!content.body || content.body.trim().length === 0) {
+      return (
+        <div className="no-content-display">
+          <div className="no-content-icon">📄</div>
+          <h3>Full content unavailable</h3>
+          <p>The system was unable to extract the full body text for this document. You can still view the original source.</p>
+          <a href={content.source_url} target="_blank" rel="noopener noreferrer" className="btn secondary">
+            View Original Source →
+          </a>
+        </div>
+      );
+    }
+
     if (!annotations || annotations.length === 0) {
       return <div className="content-text">{content.body}</div>;
     }
@@ -514,7 +527,7 @@ function AnnotationsSidebar({ annotations, onEdit, onDelete, onExport }) {
 }
 
 // Bottom Action Bar
-function ActionBar({ onPrevious, onNext, onAddToCollection, onDelete, hasPrevious, hasNext }) {
+function ActionBar({ onPrevious, onNext, onAddToCollection, onDelete, onToggleZen, isZenMode, hasPrevious, hasNext }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -558,6 +571,9 @@ function ActionBar({ onPrevious, onNext, onAddToCollection, onDelete, hasPreviou
         <div className="action-buttons">
           <button className="action-btn" onClick={onAddToCollection}>
             📁 Add to Collection
+          </button>
+          <button className="action-btn" onClick={onToggleZen}>
+            {isZenMode ? '📖 Show Sidebars' : '🔕 Zen Mode'}
           </button>
           <button className="action-btn" onClick={handleShare}>
             {copied ? '✓ Copied!' : 'Share'}
@@ -604,6 +620,7 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
   const [isEnriching, setIsEnriching] = useState(false);
   const [error, setError] = useState(null);
   const [adjacentItems, setAdjacentItems] = useState({ prev: null, next: null });
+  const [zenMode, setZenMode] = useState(false);
 
   // Load content and annotations
   useEffect(() => {
@@ -795,40 +812,48 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
   }
 
   return (
-    <div className="content-detail-page">
+    <div className={`content-detail-page ${zenMode ? 'zen-mode' : ''}`}>
       <div className="content-detail-layout">
         {/* Left Sidebar - Metadata */}
-        <aside className="left-sidebar">
-          <MetadataSidebar 
-            content={{...content, collections}}
-            onUpdateTags={handleUpdateTags}
-            onAcceptTag={handleAcceptTag}
-            onEnrich={handleEnrich}
-            isEnriching={isEnriching}
-          />
-        </aside>
+        {!zenMode && (
+          <aside className="left-sidebar">
+            <MetadataSidebar 
+              content={{...content, collections}}
+              onUpdateTags={handleUpdateTags}
+              onAcceptTag={handleAcceptTag}
+              onEnrich={handleEnrich}
+              isEnriching={isEnriching}
+            />
+          </aside>
+        )}
 
         {/* Center - Reading Pane */}
         <main className="center-pane">
-          <ReadingPane 
-            content={content}
-            annotations={annotations}
-            onCreateAnnotation={handleCreateAnnotation}
-            onSelectAnnotation={(ann) => console.log('Selected:', ann)}
-            onUpdateProgress={handleUpdateProgress}
-            isTruncated={content.is_truncated}
-          />
+          {content.body ? (
+            <ReadingPane 
+              content={content}
+              annotations={annotations}
+              onCreateAnnotation={handleCreateAnnotation}
+              onSelectAnnotation={(ann) => console.log('Selected:', ann)}
+              onUpdateProgress={handleUpdateProgress}
+              isTruncated={content.is_truncated}
+            />
+          ) : (
+            <div className="empty-state">No content available to read.</div>
+          )}
         </main>
 
         {/* Right Sidebar - Annotations */}
-        <aside className="right-sidebar">
-          <AnnotationsSidebar 
-            annotations={annotations}
-            onEdit={handleUpdateAnnotation}
-            onDelete={handleDeleteAnnotation}
-            onExport={handleExportAnnotations}
-          />
-        </aside>
+        {!zenMode && (
+          <aside className="right-sidebar">
+            <AnnotationsSidebar 
+              annotations={annotations}
+              onEdit={handleUpdateAnnotation}
+              onDelete={handleDeleteAnnotation}
+              onExport={handleExportAnnotations}
+            />
+          </aside>
+        )}
       </div>
 
       {/* Bottom Action Bar */}
@@ -838,6 +863,8 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
         onAddToCollection={handleAddToCollection}
         onShare={handleShare}
         onDelete={handleDelete}
+        onToggleZen={() => setZenMode(!zenMode)}
+        isZenMode={zenMode}
         hasPrevious={!!adjacentItems.prev}
         hasNext={!!adjacentItems.next}
       />
@@ -846,22 +873,28 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
         .content-detail-page {
           display: flex;
           flex-direction: column;
-          height: calc(100vh - 60px);
+          height: 100vh;
           overflow: hidden;
+          background: var(--bg-color);
         }
 
         .content-detail-layout {
           display: grid;
-          grid-template-columns: 280px 1fr 300px;
+          grid-template-columns: 260px 1fr 280px;
           gap: 0;
           flex: 1;
           overflow: hidden;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .zen-mode .content-detail-layout {
+          grid-template-columns: 1fr;
         }
 
         /* Left Sidebar */
         .left-sidebar {
-          background: #f9fafb;
-          border-right: 1px solid #e5e7eb;
+          background: var(--bg-secondary);
+          border-right: 1px solid var(--border-color);
           overflow-y: auto;
           padding: 1.5rem;
         }
@@ -869,7 +902,7 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
         .metadata-sidebar {
           display: flex;
           flex-direction: column;
-          gap: 1.25rem;
+          gap: 1.5rem;
         }
 
         .metadata-section {
@@ -885,16 +918,17 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
         }
 
         .metadata-label {
-          font-size: 0.7rem;
-          font-weight: 600;
-          color: #9ca3af;
+          font-family: var(--font-mono);
+          font-size: 0.65rem;
+          font-weight: 500;
+          color: var(--text-secondary);
           text-transform: uppercase;
-          letter-spacing: 0.05em;
+          letter-spacing: 0.1em;
         }
 
         .metadata-value {
           font-size: 0.85rem;
-          color: #374151;
+          color: var(--text-color);
         }
 
         .source-url {
@@ -1003,15 +1037,16 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
         }
 
         .ai-summary {
-          background: #fefce8;
+          background: rgba(245, 200, 66, 0.05);
+          border: 1px solid rgba(245, 200, 66, 0.1);
           border-radius: 8px;
-          padding: 0.75rem;
+          padding: 1rem;
         }
 
         .summary-box p {
-          font-size: 0.8rem;
-          color: #374151;
-          line-height: 1.5;
+          font-size: 0.85rem;
+          color: var(--text-color);
+          line-height: 1.6;
           margin: 0;
         }
 
@@ -1061,9 +1096,10 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
 
         /* Center Pane */
         .center-pane {
-          background: white;
+          background: var(--bg-color);
           overflow-y: auto;
-          padding: 2rem 3rem;
+          padding: 4rem 10% 8rem;
+          scroll-behavior: smooth;
         }
 
         .reading-progress-bar {
@@ -1097,18 +1133,22 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
         }
 
         .article-title {
-          font-size: 1.75rem;
-          font-weight: 700;
-          color: #1f2937;
-          margin: 0 0 1.5rem;
-          line-height: 1.3;
+          font-family: var(--font-serif);
+          font-size: 2.5rem;
+          font-weight: 900;
+          color: var(--text-color);
+          margin: 0 0 2rem;
+          line-height: 1.1;
+          letter-spacing: -0.03em;
         }
 
         .article-content {
-          font-size: 1.1rem;
+          font-size: 1.2rem;
           line-height: 1.8;
-          color: #374151;
+          color: var(--text-color);
           user-select: text;
+          max-width: 800px;
+          margin: 0 auto;
         }
 
         .content-text {
@@ -1280,8 +1320,8 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
 
         /* Right Sidebar */
         .right-sidebar {
-          background: #f9fafb;
-          border-left: 1px solid #e5e7eb;
+          background: var(--bg-secondary);
+          border-left: 1px solid var(--border-color);
           overflow-y: auto;
           padding: 1.5rem;
         }
@@ -1294,18 +1334,19 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
         }
 
         .annotations-header h3 {
+          font-family: var(--font-serif);
           font-size: 1rem;
-          color: #1f2937;
+          color: var(--text-color);
           margin: 0;
         }
 
         .export-btn {
           padding: 0.35rem 0.75rem;
-          background: white;
-          border: 1px solid #e5e7eb;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-color);
           border-radius: 4px;
           font-size: 0.8rem;
-          color: #374151;
+          color: var(--text-color);
           cursor: pointer;
         }
 
@@ -1334,10 +1375,11 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
         }
 
         .annotation-card {
-          background: white;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-color);
           border-radius: 8px;
           padding: 0.75rem;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+          box-shadow: var(--shadow-sm);
         }
 
         .annotation-header {
@@ -1364,8 +1406,8 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
         }
 
         .annotation-quote {
-          font-size: 0.8rem;
-          color: #374151;
+          font-size: 0.85rem;
+          color: var(--text-color);
           font-style: italic;
           line-height: 1.4;
           margin-bottom: 0.5rem;
@@ -1373,8 +1415,8 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
 
         .annotation-note {
           font-size: 0.8rem;
-          color: #6b7280;
-          background: #f9fafb;
+          color: var(--text-secondary);
+          background: var(--bg-secondary);
           padding: 0.5rem;
           border-radius: 4px;
           margin-bottom: 0.5rem;
@@ -1406,11 +1448,12 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
 
         /* Action Bar */
         .action-bar {
-          background: white;
-          border-top: 1px solid #e5e7eb;
-          padding: 0.75rem 1.5rem;
+          background: var(--bg-secondary);
+          border-top: 1px solid var(--border-color);
+          padding: 1rem 2rem;
           position: sticky;
           bottom: 0;
+          backdrop-filter: blur(10px);
         }
 
         .action-bar-inner {
@@ -1448,9 +1491,9 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
         }
 
         .action-btn {
-          background: white;
-          border: 1px solid #e5e7eb;
-          color: #374151;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-color);
+          color: var(--text-color);
         }
 
         .action-btn:hover {
@@ -1468,10 +1511,12 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
 
         /* Delete Confirmation Modal */
         .delete-confirm-dialog {
-          background: white;
-          padding: 1.5rem;
-          border-radius: 12px;
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-color);
+          padding: 2rem;
+          border-radius: 16px;
           max-width: 400px;
+          box-shadow: var(--shadow-lg);
         }
 
         .delete-confirm-dialog h3 {
@@ -1593,6 +1638,37 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
 
         .app.dark-mode .selection-tooltip {
           background: #1f2937;
+        }
+
+        .no-content-display {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 4rem 2rem;
+          text-align: center;
+          background: var(--bg-secondary);
+          border-radius: var(--border-radius-lg);
+          border: 1px dashed var(--border-color);
+          margin-top: 2rem;
+        }
+
+        .no-content-icon {
+          font-size: 3rem;
+          margin-bottom: 1rem;
+          opacity: 0.5;
+        }
+
+        .no-content-display h3 {
+          margin-bottom: 0.5rem;
+          color: var(--text-color);
+        }
+
+        .no-content-display p {
+          color: var(--text-secondary);
+          max-width: 400px;
+          margin-bottom: 1.5rem;
+          font-size: 0.9rem;
         }
 
         /* Responsive */

@@ -4,6 +4,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 15000, // 15 second timeout — prevents infinite loading
   headers: {
     'Content-Type': 'application/json',
   },
@@ -27,13 +28,15 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response) {
-      if (error.response.status === 401) {
-        console.warn('Unauthorized - token may be invalid or expired');
-        localStorage.removeItem('smartkeep_auth_token');
-        localStorage.removeItem('smartkeep_user');
-        delete apiClient.defaults.headers.common['Authorization'];
-      }
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      error.userMessage = 'Request timed out. Is the backend server running on port 8000?';
+    } else if (!error.response) {
+      error.userMessage = 'Cannot connect to server. Make sure the backend is running on http://localhost:8000';
+    } else if (error.response.status === 401) {
+      console.warn('Unauthorized - token may be invalid or expired');
+      localStorage.removeItem('smartkeep_auth_token');
+      localStorage.removeItem('smartkeep_user');
+      delete apiClient.defaults.headers.common['Authorization'];
     }
     return Promise.reject(error);
   }
@@ -57,7 +60,7 @@ export const documentAPI = {
 // Content APIs
 export const contentAPI = {
   createFromURL: (url) => apiClient.post('/content', { url }),
-  createManual: (title, content) => apiClient.post('/content/manual', { title, content }),
+  createManual: (title, body) => apiClient.post('/content/manual', { title, body }),
   enrich: (id) => apiClient.post('/content/' + id + '/enrich'),
   getById: (id) => apiClient.get('/content/' + id),
   update: (id, data) => apiClient.put('/content/' + id, data),
@@ -129,10 +132,21 @@ export const exploreAPI = {
 
 // Stats APIs
 export const statsAPI = {
+  getOverview: () => apiClient.get('/stats/overview'),
+  getSavesOverTime: (days, granularity) => 
+    apiClient.get('/stats/saves-over-time', { params: { days, granularity } }),
+  getTopDomains: (limit) => 
+    apiClient.get('/stats/top-domains', { params: { limit } }),
   getTagDistribution: (limit) =>
     apiClient.get('/stats/tag-distribution', { params: { limit } }),
+  getReadingTimeDistribution: () => 
+    apiClient.get('/stats/reading-time-distribution'),
+  getDifficultyOverTime: () => 
+    apiClient.get('/stats/difficulty-over-time'),
   getActivityHeatmap: (days) =>
-    apiClient.get('/stats/heatmap', { params: { days } }),
+    apiClient.get('/stats/activity-heatmap', { params: { days } }),
+  getWeekdayActivity: () => 
+    apiClient.get('/stats/weekday-activity'),
   getStreak: () =>
     apiClient.get('/stats/streak'),
 };

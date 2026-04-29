@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     
     # Groq API Configuration (for LLM summarization and tagging)
     GROQ_API_KEY: SecretStr = None  # type: ignore
+
+    # Reddit API Configuration (for scraping Reddit links via PRAW)
+    REDDIT_CLIENT_ID: Optional[str] = None
+    REDDIT_CLIENT_SECRET: Optional[SecretStr] = None
     
     # Content Processing Configuration
     MAX_CONTENT_LENGTH: int = 10000

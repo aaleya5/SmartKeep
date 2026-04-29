@@ -65,8 +65,8 @@ class EnrichmentService:
             try:
                 text_to_embed = f"{content.title} {content.body or ''}"
                 embedding = embedding_service.embed(text_to_embed)
-                # Store as list for pgvector compatibility
-                content.embedding = embedding.tolist()
+                # Store directly as it is already a list
+                content.embedding = embedding
                 embedding_success = True
                 logger.info(f"Generated embedding for content {content_id}")
             except Exception as e:
@@ -155,7 +155,7 @@ class EnrichmentService:
             
             text_to_embed = f"{content.title} {content.body or ''}"
             embedding = embedding_service.embed(text_to_embed)
-            content.embedding = embedding.tolist()
+            content.embedding = embedding
             db.commit()
             logger.info(f"Generated embedding for content {content_id}")
         except Exception as e:

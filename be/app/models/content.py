@@ -23,14 +23,16 @@ class VectorType(TypeDecorator):
         return value
 
 
+import uuid
+
 class Content(Base):
     __tablename__ = "content"
 
-    id = Column(UUID(as_uuid=True), primary_key=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
     # Source
-    source_url = Column(Text, nullable=False, unique=True)
-    domain = Column(Text, nullable=False, index=True)
+    source_url = Column(Text, nullable=False)  # unique per user, enforced via UniqueConstraint below
+    domain = Column(Text, nullable=True, index=True)
     og_image_url = Column(Text, nullable=True)
     favicon_url = Column(Text, nullable=True)
     
@@ -78,8 +80,8 @@ class Content(Base):
         Index('idx_content_created_at', 'created_at'),
         Index('idx_content_last_opened', 'last_opened_at'),
         Index('idx_content_tags', 'tags', postgresql_using='gin'),
-        Index('idx_content_search_vector', 'search_vector', postgresql_using='gin'),
-        Index('idx_content_embedding', 'embedding', postgresql_using='gin'),
+        Index('idx_content_search_vector_gin', 'search_vector', postgresql_using='gin'),
+        Index('idx_content_embedding_gin', 'embedding', postgresql_using='gin'),
     )
     
     @property

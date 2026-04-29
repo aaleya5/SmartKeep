@@ -3,6 +3,15 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 from app.core.config import settings
 
+# Import all models here so that they are registered with SQLAlchemy's metadata
+# before any session or router accesses them, preventing mapper initialization errors.
+from app.models.user import User
+from app.models.content import Content, VectorType
+from app.models.collection import Collection, ContentCollection
+from app.models.annotation import Annotation
+from app.models.search import SearchHistory, SavedSearch
+from app.models.preferences import Preferences
+
 engine = create_engine(
     settings.DATABASE_URL,
     poolclass=QueuePool,

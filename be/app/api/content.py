@@ -9,6 +9,7 @@ from app.schemas.content import (
     ContentManualCreate,
     ContentUpdate,
     ContentResponse,
+    ContentDetailResponse,
     ContentListResponse,
     BulkTagsUpdate,
     BulkDeleteRequest,
@@ -171,7 +172,7 @@ def get_content_list(
         )
 
 
-@router.get("/{content_id}", response_model=ContentResponse)
+@router.get("/{content_id}", response_model=ContentDetailResponse)
 def get_content(content_id: UUID, db: Session = Depends(get_db), current_user: Optional[User] = Depends(get_current_user, use_cache=False)):
     """
     Get content by ID.

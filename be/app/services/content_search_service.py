@@ -161,7 +161,7 @@ class ContentSearchService:
         sql_parts = [
             f"""
             SELECT c.*, 
-                   1 - (c.embedding <=> :embedding::vector) as similarity_score
+                   1 - (c.embedding\:\:vector <=> :embedding\:\:vector) as similarity_score
             FROM content c
             WHERE c.embedding IS NOT NULL
               AND array_length(c.embedding, 1) = {settings.EMBEDDING_DIMENSION}
@@ -191,7 +191,7 @@ class ContentSearchService:
             sql_parts.append("AND c.difficulty = :difficulty")
             params['difficulty'] = difficulty
         
-        sql_parts.append("ORDER BY c.embedding <=> :embedding2::vector LIMIT :limit OFFSET :offset")
+        sql_parts.append("ORDER BY c.embedding\:\:vector <=> :embedding2\:\:vector LIMIT :limit OFFSET :offset")
         params['embedding2'] = embedding_string
         
         sql = ' '.join(sql_parts)
@@ -201,6 +201,7 @@ class ContentSearchService:
             rows = result.fetchall()
         except Exception as e:
             logger.error(f"Semantic search error: {e}")
+            self.db.rollback()
             return {
                 'items': [],
                 'total': 0,

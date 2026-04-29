@@ -99,8 +99,9 @@ class ContentService:
             db.add(content)
             db.commit()
             db.refresh(content)
-        except IntegrityError:
+        except IntegrityError as e:
             db.rollback()
+            print(f"IntegrityError during save: {e}")
             raise DuplicateURLError(f"URL '{url}' has already been saved.")
         
         # Trigger background enrichment

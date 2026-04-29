@@ -14,6 +14,7 @@ from uuid import UUID
 from datetime import datetime
 
 from app.db.session import get_db
+from app.api.auth import get_current_user
 from app.schemas.annotation import (
     AnnotationCreate,
     AnnotationUpdate,
@@ -173,7 +174,8 @@ def list_annotations(
     sort: str = Query("newest", enum=["newest", "oldest", "source_title"], description="Sort order"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get all annotations with filtering and pagination.
@@ -194,6 +196,7 @@ def list_annotations(
     
     annotations, total = annotation_service.list_annotations(
         db=db,
+        owner_id=str(current_user.id),
         color=color,
         content_tags=tag_list,
         domain=domain,
