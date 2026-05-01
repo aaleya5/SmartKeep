@@ -12,6 +12,7 @@ All these operations are computationally expensive and run asynchronously.
 
 import logging
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.models.content import Content
 from app.services.embedding_service import embedding_service
 from app.services.llm_service import llm_service
@@ -46,6 +47,7 @@ class EnrichmentService:
         """
         db = SessionLocal()
         try:
+            db.execute(text("SET SESSION app.bypass_rls = 'on'"))
             content = db.query(Content).filter(Content.id == UUID(content_id)).first()
             if not content:
                 logger.warning(f"Content {content_id} not found for enrichment")
@@ -149,6 +151,7 @@ class EnrichmentService:
         """
         db = SessionLocal()
         try:
+            db.execute(text("SET SESSION app.bypass_rls = 'on'"))
             content = db.query(Content).filter(Content.id == UUID(content_id)).first()
             if not content:
                 return
@@ -173,6 +176,7 @@ class EnrichmentService:
         """
         db = SessionLocal()
         try:
+            db.execute(text("SET SESSION app.bypass_rls = 'on'"))
             content = db.query(Content).filter(Content.id == UUID(content_id)).first()
             if not content or not content.body:
                 return

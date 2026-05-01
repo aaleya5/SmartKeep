@@ -39,7 +39,7 @@ function AnnotationCard({ annotation, onNavigate }) {
 
       {/* Highlighted text in blockquote */}
       <blockquote className="highlighted-text">
-        "{annotation.selected_text}"
+        &ldquo;{annotation.selected_text}&rdquo;
       </blockquote>
 
       {/* User's note */}
@@ -734,7 +734,9 @@ function AnnotationsPage({ onNavigate }) {
           .annotations-page { padding: 16px; }
           .annotations-list { grid-template-columns: 1fr; }
           .header-title h1 { font-size: 2.5rem; }
-        }
+
+          .filters-bar {
+            flex-direction: column;
             align-items: stretch;
           }
 

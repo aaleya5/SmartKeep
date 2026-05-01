@@ -16,6 +16,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import BackgroundTasks
 from app.db.session import SessionLocal
 from app.models.content import Content
+from sqlalchemy import text
 from app.services.content_service import ContentService, DuplicateURLError
 
 
@@ -196,6 +197,7 @@ def bulk_import_task(job_id: str, urls: List[Dict[str, str]]) -> None:
             # Create a new session for this task
             db = SessionLocal()
             try:
+                db.execute(text("SET SESSION app.bypass_rls = 'on'"))
                 # Try to create content from URL
                 content = ContentService.create_from_url(db, url, background_tasks=None)
                 job.completed += 1

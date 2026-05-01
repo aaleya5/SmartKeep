@@ -38,7 +38,7 @@ router = APIRouter(prefix="/content", tags=["Content"])
 
 
 @router.post("", response_model=ContentResponse, status_code=status.HTTP_201_CREATED)
-def create_from_url(request: ContentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_from_url(request: ContentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Create content from URL.
     
@@ -52,7 +52,7 @@ def create_from_url(request: ContentCreate, background_tasks: BackgroundTasks, d
     Errors: 409 if duplicate, 422 if invalid URL, 502 if unreachable
     """
     try:
-        return ContentService.create_from_url(db, str(request.url), str(current_user.id), background_tasks)
+        return await ContentService.create_from_url(db, str(request.url), str(current_user.id), background_tasks)
     except DuplicateURLError as e:
         raise HTTPException(
             status_code=409,
@@ -66,7 +66,9 @@ def create_from_url(request: ContentCreate, background_tasks: BackgroundTasks, d
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Unable to fetch URL: {str(e)}")
+        import logging
+        logging.getLogger(__name__).error(f"Scraping error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=502, detail=f"Unable to fetch URL content. Please try manual entry.")
 
 
 @router.post("/manual", response_model=ContentResponse, status_code=status.HTTP_201_CREATED)
@@ -165,10 +167,11 @@ def get_content_list(
             has_next=has_next,
         )
     except Exception as e:
-        import traceback
+        import logging
+        logging.getLogger(__name__).error(f"Error fetching content: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Error fetching content: {str(e)}\n{traceback.format_exc()}"
+            detail="Internal server error occurred while fetching content list."
         )
 
 

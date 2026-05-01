@@ -11,6 +11,7 @@ from app.models.collection import Collection, ContentCollection
 from app.models.annotation import Annotation
 from app.models.search import SearchHistory, SavedSearch
 from app.models.preferences import Preferences
+from app.models.auth_token import VerificationToken, PasswordResetToken
 
 engine = create_engine(
     settings.DATABASE_URL,
@@ -26,6 +27,29 @@ SessionLocal = sessionmaker(
     autoflush=False,
     bind=engine
 )
+
+from sqlalchemy import event
+
+@event.listens_for(engine, "checkin")
+def clear_rls(dbapi_connection, connection_record):
+    """Clear RLS settings when connection is returned to the pool to prevent leaks."""
+    if dbapi_connection is None:
+        return
+    
+    try:
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("RESET app.current_user_id")
+            cursor.execute("RESET app.bypass_rls")
+            # Also ensure we're not leaving an uncommitted transaction from the RESET
+            if not dbapi_connection.autocommit:
+                dbapi_connection.commit()
+        finally:
+            cursor.close()
+    except Exception:
+        # If the connection is broken, resetting RLS will fail, which is fine 
+        # as the connection will be discarded anyway.
+        pass
 
 def get_db():
     db = SessionLocal()

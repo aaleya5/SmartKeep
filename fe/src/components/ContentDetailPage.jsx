@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { contentAPI, annotationAPI, collectionAPI } from '../services/api';
 
 // Left Sidebar - Metadata
@@ -223,6 +224,12 @@ function ReadingPane({ content, annotations, onCreateAnnotation, onSelectAnnotat
   const handleMouseUp = useCallback(() => {
     const sel = window.getSelection();
     if (sel && sel.toString().trim().length > 0) {
+      // Ensure selection is inside the article content
+      if (contentRef.current && !contentRef.current.contains(sel.anchorNode)) {
+        setShowTooltip(false);
+        return;
+      }
+      
       const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       setSelection({
@@ -364,7 +371,7 @@ function ReadingPane({ content, annotations, onCreateAnnotation, onSelectAnnotat
   };
 
   return (
-    <div className="reading-pane" ref={readingPaneRef} onScroll={handleScroll}>
+    <div className="reading-pane" ref={readingPaneRef} onScroll={handleScroll} onMouseUp={handleMouseUp}>
       {/* Reading Progress Bar */}
       <div className="reading-progress-bar">
         <div 
@@ -390,7 +397,6 @@ function ReadingPane({ content, annotations, onCreateAnnotation, onSelectAnnotat
       <div 
         className="article-content" 
         ref={contentRef}
-        onMouseUp={handleMouseUp}
       >
         {renderContentWithHighlights()}
       </div>
@@ -403,6 +409,7 @@ function ReadingPane({ content, annotations, onCreateAnnotation, onSelectAnnotat
             left: tooltipPosition.x, 
             top: tooltipPosition.y,
           }}
+          onMouseDown={(e) => e.preventDefault()}
         >
           {!showNoteInput ? (
             <>
@@ -612,7 +619,9 @@ function ActionBar({ onPrevious, onNext, onAddToCollection, onDelete, onToggleZe
 }
 
 // Main ContentDetailPage Component
-function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
+function ContentDetailPage({ onDeleteDocument }) {
+  const { id: contentId } = useParams();
+  const navigate = useNavigate();
   const [content, setContent] = useState(null);
   const [collections, setCollections] = useState([]);
   const [annotations, setAnnotations] = useState([]);
@@ -624,6 +633,7 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
 
   // Load content and annotations
   useEffect(() => {
+    if (!contentId) return;
     loadContent();
     loadCollections();
     loadAnnotations();
@@ -764,18 +774,19 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
 
   const handleNavigatePrevious = () => {
     if (adjacentItems.prev) {
-      onNavigate('content-detail', { selectedItem: adjacentItems.prev.id });
+      navigate(`/app/content/${adjacentItems.prev.id}`);
     }
   };
 
   const handleNavigateNext = () => {
     if (adjacentItems.next) {
-      onNavigate('content-detail', { selectedItem: adjacentItems.next.id });
+      navigate(`/app/content/${adjacentItems.next.id}`);
     }
   };
 
   const handleAddToCollection = () => {
-    onNavigate('add-to-collection', { documentId: contentId });
+    // No-op: handled by the AddToCollectionModal in App.jsx via the action bar
+    // For now open a simple alert or integrate with global modal
   };
 
   const handleShare = () => {
@@ -787,7 +798,7 @@ function ContentDetailPage({ contentId, onNavigate, onDeleteDocument }) {
     try {
       await contentAPI.delete(contentId);
       onDeleteDocument && onDeleteDocument(contentId);
-      onNavigate('documents');
+      navigate('/app/library');
     } catch (err) {
       console.error('Failed to delete:', err);
     }

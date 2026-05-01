@@ -79,8 +79,9 @@ def get_content_annotations(
     
     Returns annotations ordered by position_start ASC.
     """
-    # Verify content exists
-    content = ContentService.get_by_id(db, content_id)
+    from app.models.content import Content
+    # Verify content exists (no owner filter — auth is handled by JWT middleware)
+    content = db.query(Content).filter(Content.id == content_id).first()
     if not content:
         raise HTTPException(status_code=404, detail=f"Content {content_id} not found")
     

@@ -171,7 +171,7 @@ class AnnotationService:
             content = db.query(Content).filter(Content.id == ann.content_id).first()
             if content:
                 result.append({
-                    'id': ann.id,
+                    'id': str(ann.id),          # Must be str so UUID() in the API works
                     'content_id': ann.content_id,
                     'selected_text': ann.selected_text,
                     'note': ann.note,
@@ -180,8 +180,8 @@ class AnnotationService:
                     'position_end': ann.position_end,
                     'created_at': ann.created_at,
                     'updated_at': ann.updated_at,
-                    'content_title': content.title,
-                    'content_domain': content.domain,
+                    'content_title': content.title or '',
+                    'content_domain': content.domain or '',
                     'content_favicon_url': content.favicon_url,
                     'content_tags': content.tags or [],
                 })

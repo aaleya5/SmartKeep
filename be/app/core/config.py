@@ -33,7 +33,20 @@ class Settings(BaseSettings):
     # JWT Authentication Configuration
     JWT_SECRET_KEY: SecretStr = SecretStr("smartkeep-dev-secret")
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
+
+    # OAuth Configuration
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[SecretStr] = None
+    GITHUB_CLIENT_ID: Optional[str] = None
+    GITHUB_CLIENT_SECRET: Optional[SecretStr] = None
+
+    # Email Configuration
+    RESEND_API_KEY: Optional[SecretStr] = None
+    EMAIL_FROM: str = "noreply@smartkeep.app"
+    
+    # URL Configuration
+    FRONTEND_URL: str = "http://localhost:5173"
 
     class Config:
         env_file = ".env"

@@ -4,7 +4,7 @@ Content Search Service
 Provides unified search for Content model using:
 1. PostgreSQL Full-Text Search (keyword)
 2. pgvector semantic search (semantic)
-3. Hybrid search combining both (hybrid)
+3. Hybrid search combining both (hybrid) using RRF
 """
 
 import time
@@ -26,11 +26,12 @@ logger = logging.getLogger(__name__)
 class ContentSearchService:
     """Service for searching content using keyword, semantic, or hybrid search."""
     
-    BM25_WEIGHT = 0.4
-    SEMANTIC_WEIGHT = 0.6
+    # RRF (Reciprocal Rank Fusion) parameters
+    RRF_K = 60
     
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, user_id: str):
         self.db = db
+        self.user_id = user_id
     
     def keyword_search(
         self,
@@ -58,15 +59,15 @@ class ContentSearchService:
                    ts_headline('english', COALESCE(c.body, ''), plainto_tsquery('english', :query), 
                                'MaxWords=30, MinWords=15, StartSel=<b>, StopSel=</b>') as matched_excerpt
             FROM content c
-            WHERE c.search_vector IS NOT NULL
+            WHERE c.user_id = :user_id
+              AND c.search_vector IS NOT NULL
               AND c.search_vector @@ plainto_tsquery('english', :query)
             """
         ]
-        params = {'query': query, 'limit': limit, 'offset': offset}
+        params = {'query': query, 'limit': limit, 'offset': offset, 'user_id': self.user_id}
         
         # Add filters
         if tags and len(tags) > 0:
-            # Filter for items containing ALL tags
             for i, tag in enumerate(tags):
                 sql_parts.append(f"AND c.tags @> :tags{i}")
                 params[f'tags{i}'] = json.dumps([tag])
@@ -97,10 +98,11 @@ class ContentSearchService:
         count_sql = """
             SELECT COUNT(*) as total
             FROM content c
-            WHERE c.search_vector IS NOT NULL
+            WHERE c.user_id = :user_id
+              AND c.search_vector IS NOT NULL
               AND c.search_vector @@ plainto_tsquery('english', :query)
         """
-        count_params = {'query': query}
+        count_params = {'query': query, 'user_id': self.user_id}
         
         if tags and len(tags) > 0:
             count_sql += f" AND c.tags @> :tags0"
@@ -163,11 +165,12 @@ class ContentSearchService:
             SELECT c.*, 
                    1 - (c.embedding\:\:vector <=> :embedding\:\:vector) as similarity_score
             FROM content c
-            WHERE c.embedding IS NOT NULL
+            WHERE c.user_id = :user_id
+              AND c.embedding IS NOT NULL
               AND array_length(c.embedding, 1) = {settings.EMBEDDING_DIMENSION}
             """
         ]
-        params = {'embedding': embedding_string, 'limit': limit, 'offset': offset}
+        params = {'embedding': embedding_string, 'limit': limit, 'offset': offset, 'user_id': self.user_id}
         
         # Add filters
         if tags and len(tags) > 0:
@@ -212,14 +215,17 @@ class ContentSearchService:
         count_sql = """
             SELECT COUNT(*) as total
             FROM content c
-            WHERE c.embedding IS NOT NULL
+            WHERE c.user_id = :user_id
+              AND c.embedding IS NOT NULL
               AND array_length(c.embedding, 1) = :dim
         """
-        count_params = {'dim': settings.EMBEDDING_DIMENSION}
+        count_params = {'dim': settings.EMBEDDING_DIMENSION, 'user_id': self.user_id}
         
+        # Apply filters to count query as well
         if tags and len(tags) > 0:
-            count_sql += f" AND c.tags @> :tags0"
-            count_params['tags0'] = json.dumps([tags[0]])
+            for i, tag in enumerate(tags):
+                count_sql += f" AND c.tags @> :tags{i}"
+                count_params[f'tags{i}'] = json.dumps([tag])
         if domain:
             count_sql += " AND c.domain = :domain"
             count_params['domain'] = domain
@@ -242,6 +248,22 @@ class ContentSearchService:
         for row in rows:
             content = self._row_to_content_dict(row)
             content['similarity_score'] = float(row.similarity_score) if row.similarity_score else 0.0
+            # For semantic search, generate a simple excerpt if body exists
+            if row.body:
+                body_lower = row.body.lower()
+                query_words = query.lower().split()
+                first_match = -1
+                for word in query_words:
+                    idx = body_lower.find(word)
+                    if idx != -1:
+                        first_match = idx
+                        break
+                
+                if first_match != -1:
+                    start = max(0, first_match - 60)
+                    end = min(len(row.body), first_match + 100)
+                    content['matched_excerpt'] = (row.body[start:end] + "...") if end < len(row.body) else row.body[start:end]
+            
             items.append(content)
         
         return {
@@ -260,90 +282,68 @@ class ContentSearchService:
         date_from: datetime = None,
         date_to: datetime = None,
         difficulty: str = None,
-        bm25_weight: float = None,
-        semantic_weight: float = None,
     ) -> Dict[str, Any]:
         """
-        Hybrid search combining keyword and semantic search.
+        Hybrid search using Reciprocal Rank Fusion (RRF).
         
-        Runs both searches, normalizes scores, and combines them.
+        RRF combines rankings from multiple search engines without needing normalized scores.
+        formula: score(d) = sum_{r in rankings} 1 / (k + rank(d, r))
         """
-        if bm25_weight is None:
-            bm25_weight = self.BM25_WEIGHT
-        if semantic_weight is None:
-            semantic_weight = self.SEMANTIC_WEIGHT
-        
-        # Normalize weights
-        total_weight = bm25_weight + semantic_weight
-        if total_weight > 0:
-            bm25_weight = bm25_weight / total_weight
-            semantic_weight = semantic_weight / total_weight
-        
         start_time = time.time()
         
-        # Get keyword results (more for merging)
+        # Get more results from each to have a good pool for fusion
+        # Using limit * 3 as a heuristic for fusion pool
+        pool_limit = max(100, limit * 3)
+        
         keyword_results = self.keyword_search(
-            query, limit * 2, 0, tags, domain, date_from, date_to, difficulty
+            query, pool_limit, 0, tags, domain, date_from, date_to, difficulty
         )
         
-        # Get semantic results (more for merging)
         semantic_results = self.semantic_search(
-            query, limit * 2, 0, tags, domain, date_from, date_to, difficulty
+            query, pool_limit, 0, tags, domain, date_from, date_to, difficulty
         )
         
-        # Build combined results
-        results_dict = {}
+        # Fusion logic (RRF)
+        rrf_scores = {} # doc_id -> score
+        doc_map = {}    # doc_id -> item_dict
         
-        # Add keyword results
-        max_keyword_score = max(
-            (item.get('relevance_score', 0) for item in keyword_results['items']),
-            default=1
-        )
-        for item in keyword_results['items']:
-            content_id = str(item['id'])
-            normalized_score = item.get('relevance_score', 0) / max_keyword_score if max_keyword_score > 0 else 0
-            results_dict[content_id] = {
-                'item': item,
-                'keyword_score': normalized_score,
-                'semantic_score': 0,
-            }
-        
-        # Add semantic results
-        max_semantic_score = max(
-            (item.get('similarity_score', 0) for item in semantic_results['items']),
-            default=1
-        )
-        for item in semantic_results['items']:
-            content_id = str(item['id'])
-            normalized_score = item.get('similarity_score', 0) / max_semantic_score if max_semantic_score > 0 else 0
-            if content_id in results_dict:
-                results_dict[content_id]['semantic_score'] = normalized_score
+        # Process keyword ranks
+        for i, item in enumerate(keyword_results['items']):
+            doc_id = item['id']
+            rank = i + 1
+            rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + (1.0 / (self.RRF_K + rank))
+            doc_map[doc_id] = item
+            doc_map[doc_id]['relevance_score'] = item.get('relevance_score', 0)
+            
+        # Process semantic ranks
+        for i, item in enumerate(semantic_results['items']):
+            doc_id = item['id']
+            rank = i + 1
+            rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + (1.0 / (self.RRF_K + rank))
+            
+            if doc_id in doc_map:
+                # Merge semantic info into existing keyword doc
+                doc_map[doc_id]['similarity_score'] = item.get('similarity_score', 0)
+                # Prefer semantic excerpt if keyword one is missing
+                if not doc_map[doc_id].get('matched_excerpt') and item.get('matched_excerpt'):
+                    doc_map[doc_id]['matched_excerpt'] = item['matched_excerpt']
             else:
-                results_dict[content_id] = {
-                    'item': item,
-                    'keyword_score': 0,
-                    'semantic_score': normalized_score,
-                }
+                doc_map[doc_id] = item
+                doc_map[doc_id]['similarity_score'] = item.get('similarity_score', 0)
+                doc_map[doc_id]['relevance_score'] = 0
         
-        # Calculate combined scores
-        combined_results = []
-        for content_id, scores in results_dict.items():
-            combined_score = (
-                bm25_weight * scores['keyword_score'] +
-                semantic_weight * scores['semantic_score']
-            )
-            item = scores['item']
-            item['relevance_score'] = scores['keyword_score']
-            item['similarity_score'] = scores['semantic_score']
-            item['combined_score'] = combined_score
-            combined_results.append(item)
+        # Sort by RRF score
+        fused_results = []
+        for doc_id, score in rrf_scores.items():
+            item = doc_map[doc_id]
+            item['combined_score'] = score
+            fused_results.append(item)
+            
+        fused_results.sort(key=lambda x: x['combined_score'], reverse=True)
         
-        # Sort by combined score
-        combined_results.sort(key=lambda x: x.get('combined_score', 0), reverse=True)
-        
-        # Apply pagination
-        total = len(combined_results)
-        paginated_results = combined_results[offset:offset + limit]
+        # Paginate
+        total = len(fused_results)
+        paginated_results = fused_results[offset : offset + limit]
         
         elapsed_time = time.time() - start_time
         
@@ -382,11 +382,16 @@ class ContentSearchService:
         sql = """
             SELECT DISTINCT title
             FROM content
-            WHERE title ILIKE :prefix
+            WHERE user_id = :user_id
+              AND title ILIKE :prefix
             ORDER BY title
             LIMIT :limit
         """
-        result = self.db.execute(text(sql), {'prefix': f'%{prefix}%', 'limit': limit})
+        result = self.db.execute(text(sql), {
+            'user_id': self.user_id,
+            'prefix': f'%{prefix}%', 
+            'limit': limit
+        })
         return [row.title for row in result.fetchall()]
     
     def _row_to_content_dict(self, row) -> dict:
@@ -422,9 +427,10 @@ class SearchHistoryService:
     """Service for managing search history."""
     
     @staticmethod
-    def add_history(db: Session, query: str, mode: str, result_count: int) -> SearchHistory:
+    def add_history(db: Session, user_id: str, query: str, mode: str, result_count: int) -> SearchHistory:
         """Add a search query to history."""
         history = SearchHistory(
+            user_id=user_id,
             query=query,
             mode=mode,
             result_count=result_count,
@@ -434,16 +440,20 @@ class SearchHistoryService:
         return history
     
     @staticmethod
-    def get_history(db: Session, limit: int = 20) -> List[SearchHistory]:
+    def get_history(db: Session, user_id: str, limit: int = 20) -> List[SearchHistory]:
         """Get recent search history."""
-        return db.query(SearchHistory).order_by(
+        return db.query(SearchHistory).filter(
+            SearchHistory.user_id == user_id
+        ).order_by(
             SearchHistory.searched_at.desc()
         ).limit(limit).all()
     
     @staticmethod
-    def clear_history(db: Session) -> int:
+    def clear_history(db: Session, user_id: str) -> int:
         """Clear all search history."""
-        deleted = db.query(SearchHistory).delete()
+        deleted = db.query(SearchHistory).filter(
+            SearchHistory.user_id == user_id
+        ).delete()
         db.commit()
         return deleted
 
@@ -452,10 +462,11 @@ class SavedSearchService:
     """Service for managing saved searches."""
     
     @staticmethod
-    def create(db: Session, name: str, query: str, mode: str = 'hybrid', 
+    def create(db: Session, user_id: str, name: str, query: str, mode: str = 'hybrid', 
                filters: dict = None) -> SavedSearch:
         """Create a new saved search."""
         saved = SavedSearch(
+            user_id=user_id,
             name=name,
             query=query,
             mode=mode,
@@ -466,13 +477,20 @@ class SavedSearchService:
         return saved
     
     @staticmethod
-    def get_all(db: Session) -> List[SavedSearch]:
+    def get_all(db: Session, user_id: str) -> List[SavedSearch]:
         """Get all saved searches."""
-        return db.query(SavedSearch).order_by(SavedSearch.created_at.desc()).all()
+        return db.query(SavedSearch).filter(
+            SavedSearch.user_id == user_id
+        ).order_by(
+            SavedSearch.created_at.desc()
+        ).all()
     
     @staticmethod
-    def delete(db: Session, search_id: UUID) -> bool:
+    def delete(db: Session, user_id: str, search_id: UUID) -> bool:
         """Delete a saved search."""
-        deleted = db.query(SavedSearch).filter(SavedSearch.id == search_id).delete()
+        deleted = db.query(SavedSearch).filter(
+            SavedSearch.id == search_id,
+            SavedSearch.user_id == user_id
+        ).delete()
         db.commit()
         return deleted > 0

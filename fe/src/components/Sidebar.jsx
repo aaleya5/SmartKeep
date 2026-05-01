@@ -1,48 +1,46 @@
 import { useState } from 'react';
-import { Home, Book, Folder, Globe, Edit3, Lightbulb, Search, Plus, Settings, Keyboard, Sun, Moon, User, Command } from 'lucide-react';
+import { NavLink, useNavigate, Link } from 'react-router-dom';
+import { 
+  Home, Book, Folder, Globe, Edit3, Lightbulb, 
+  Search, Plus, Settings, Keyboard, Sun, Moon, 
+  User, Command, LogOut 
+} from 'lucide-react';
 
 function Sidebar({ 
-  currentPage, 
-  onNavigate, 
   onQuickSave,
-  onSearch,
   tags = [],
   recentSaves = [],
   isDarkMode,
   onToggleDarkMode,
-  onOpenSettings,
-  onOpenKeyboardShortcuts
+  onOpenKeyboardShortcuts,
+  onLogout
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const navigate = useNavigate();
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'library', label: 'Library', icon: Book },
-    { id: 'collections', label: 'Collections', icon: Folder },
-    { id: 'explore', label: 'Explore', icon: Globe },
-    { id: 'annotations', label: 'Annotations', icon: Edit3 },
-    { id: 'insights', label: 'Insights', icon: Lightbulb },
+    { id: 'dashboard', label: 'Dashboard', icon: Home, path: '/app' },
+    { id: 'library', label: 'Library', icon: Book, path: '/app/library' },
+    { id: 'collections', label: 'Collections', icon: Folder, path: '/app/collections' },
+    { id: 'explore', label: 'Explore', icon: Globe, path: '/app/explore' },
+    { id: 'annotations', label: 'Annotations', icon: Edit3, path: '/app/annotations' },
+    { id: 'insights', label: 'Insights', icon: Lightbulb, path: '/app/insights' },
   ];
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      onSearch(searchQuery);
-      onNavigate('search');
+      navigate(`/app/search?q=${encodeURIComponent(searchQuery)}`);
     }
   };
 
   const handleTagClick = (tag) => {
-    onNavigate('library', { filterTag: tag });
-  };
-
-  const handleRecentClick = (item) => {
-    onNavigate('library', { selectedItem: item });
+    navigate(`/app/library?tag=${encodeURIComponent(tag)}`);
   };
 
   // Default placeholder data
-  const displayTags = tags.length > 0 ? tags : [
+  const displayTags = tags.length > 0 ? tags.map(t => typeof t === 'string' ? { name: t } : t).slice(0, 10) : [
     { name: 'technology', count: 12 },
     { name: 'learning', count: 8 },
     { name: 'productivity', count: 6 },
@@ -57,9 +55,9 @@ function Sidebar({
   return (
     <aside className="sidebar-sleek">
       {/* Logo Section */}
-      <div className="sidebar-logo" onClick={() => onNavigate('dashboard')}>
+      <Link className="sidebar-logo" to="/app" style={{ textDecoration: 'none' }}>
         <span className="logo-text">Smart<b>Keep</b></span>
-      </div>
+      </Link>
 
       {/* Search Bar */}
       <form onSubmit={handleSearchSubmit} className={`sidebar-search ${isSearchFocused ? 'focused' : ''}`}>
@@ -76,7 +74,7 @@ function Sidebar({
       </form>
 
       {/* Quick Save Button */}
-      <button className="quick-save-btn" onClick={onQuickSave}>
+      <button className="quick-save-btn" onClick={() => navigate('/app/add')}>
         <Plus size={16} strokeWidth={2.5} />
         <span>Save URL</span>
       </button>
@@ -86,14 +84,15 @@ function Sidebar({
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
-            <button
+            <NavLink
               key={item.id}
-              className={`nav-item ${currentPage === item.id ? 'active' : ''}`}
-              onClick={() => onNavigate(item.id)}
+              to={item.path}
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              end={item.path === '/app'}
             >
               <Icon size={18} className="nav-icon" strokeWidth={2} />
               <span className="nav-label">{item.label}</span>
-            </button>
+            </NavLink>
           );
         })}
       </nav>
@@ -116,7 +115,7 @@ function Sidebar({
           <h4 className="section-title">RECENT</h4>
           <div className="recent-list">
             {displayRecent.map((item) => (
-              <button key={item.id} className="recent-item" onClick={() => handleRecentClick(item)}>
+              <button key={item.id} className="recent-item" onClick={() => navigate(`/app/content/${item.id}`)}>
                 <span className="recent-title">{item.title}</span>
               </button>
             ))}
@@ -126,10 +125,10 @@ function Sidebar({
 
       {/* Bottom Section */}
       <div className="sidebar-bottom">
-        <button className="bottom-item" onClick={onOpenSettings}>
+        <NavLink className={({ isActive }) => `bottom-item ${isActive ? 'active' : ''}`} to="/app/settings">
           <Settings size={16} />
           <span>Settings</span>
-        </button>
+        </NavLink>
         <button className="bottom-item" onClick={onOpenKeyboardShortcuts}>
           <Keyboard size={16} />
           <span>Shortcuts</span>
@@ -142,8 +141,11 @@ function Sidebar({
         <div className="user-section">
           <div className="user-avatar"><User size={14} /></div>
           <div className="user-info">
-            <span className="user-name">Admin User</span>
+            <span className="user-name">User</span>
           </div>
+          <button className="logout-mini-btn" onClick={onLogout} title="Logout">
+            <LogOut size={14} />
+          </button>
         </div>
       </div>
 
@@ -166,6 +168,7 @@ function Sidebar({
           padding: 24px;
           cursor: pointer;
           border-bottom: 1px solid var(--border-color);
+          display: block;
         }
 
         .logo-text { 
@@ -225,6 +228,7 @@ function Sidebar({
           background: transparent; color: var(--text-secondary);
           cursor: pointer; transition: all 0.2s; text-align: left; width: 100%;
           border-right: 2px solid transparent;
+          text-decoration: none;
         }
         .nav-item:hover { background: rgba(255, 255, 255, 0.02); color: var(--text-color); }
         .nav-item.active { 
@@ -281,8 +285,10 @@ function Sidebar({
           cursor: pointer; text-align: left; width: 100%;
           font-family: var(--font-sans); font-size: 13px; font-weight: 500; color: var(--text-secondary);
           transition: all 0.15s;
+          text-decoration: none;
         }
         .bottom-item:hover { background: rgba(255, 255, 255, 0.03); color: var(--text-color); }
+        .bottom-item.active { color: var(--accent-color); }
 
         .user-section {
           display: flex; align-items: center; gap: 12px; padding: 12px; margin-top: 8px;
@@ -293,7 +299,15 @@ function Sidebar({
           background: rgba(245, 200, 66, 0.2); color: var(--accent-color);
           display: flex; align-items: center; justify-content: center;
         }
-        .user-name { font-family: var(--font-sans); font-size: 12px; font-weight: 600; color: var(--text-color); }
+        .user-name { font-family: var(--font-sans); font-size: 12px; font-weight: 600; color: var(--text-color); flex: 1; }
+        .logout-mini-btn {
+          background: transparent; border: none; color: var(--text-secondary);
+          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          padding: 4px; border-radius: 4px; transition: all 0.2s;
+        }
+        .logout-mini-btn:hover {
+          color: #f07070; background: rgba(240, 112, 112, 0.1);
+        }
       `}</style>
     </aside>
   );

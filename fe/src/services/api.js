@@ -4,7 +4,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000, // 15 second timeout — prevents infinite loading
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -19,9 +19,7 @@ apiClient.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Add response interceptor for error handling
@@ -29,9 +27,9 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-      error.userMessage = 'Request timed out. Is the backend server running on port 8000?';
+      error.userMessage = 'Request timed out. Please check your connection.';
     } else if (!error.response) {
-      error.userMessage = 'Cannot connect to server. Make sure the backend is running on http://localhost:8000';
+      error.userMessage = 'Cannot connect to server. Make sure the backend is running.';
     } else if (error.response.status === 401) {
       console.warn('Unauthorized - token may be invalid or expired');
       localStorage.removeItem('smartkeep_auth_token');
@@ -44,30 +42,32 @@ apiClient.interceptors.response.use(
 
 // Auth APIs
 export const authAPI = {
-  register: (email, password) =>
-    apiClient.post('/auth/register', { email, password }),
-  login: (email, password) =>
-    apiClient.post('/auth/login', { email, password }),
-  me: () =>
-    apiClient.get('/auth/me'),
-};
-
-// Document APIs - using /content endpoint
-export const documentAPI = {
-  getAll: (params) => apiClient.get('/content', { params }),
+  register: (email, password) => apiClient.post('/auth/register', { email, password }),
+  login: (email, password) => apiClient.post('/auth/login', { email, password }),
+  me: () => apiClient.get('/auth/me'),
+  socialLogin: (token, provider) => apiClient.post('/auth/social-login', { token, provider }),
+  verifyEmail: (token) => apiClient.post('/auth/verify-email', { token }),
+  forgotPassword: (email) => apiClient.post('/auth/forgot-password', { email }),
+  resetPassword: (token, newPassword) => apiClient.post('/auth/reset-password', { token, new_password: newPassword }),
 };
 
 // Content APIs
 export const contentAPI = {
   createFromURL: (url) => apiClient.post('/content', { url }),
   createManual: (title, body) => apiClient.post('/content/manual', { title, body }),
-  enrich: (id) => apiClient.post('/content/' + id + '/enrich'),
-  getById: (id) => apiClient.get('/content/' + id),
-  update: (id, data) => apiClient.put('/content/' + id, data),
-  delete: (id) => apiClient.delete('/content/' + id),
-  updateProgress: (id, progress) => apiClient.patch('/content/' + id + '/progress', { reading_progress: progress }),
-  acceptTags: (id, tags) => apiClient.post('/content/' + id + '/accept-tags', { tags }),
+  enrich: (id) => apiClient.post(`/content/${id}/enrich`),
+  getById: (id) => apiClient.get(`/content/${id}`),
+  update: (id, data) => apiClient.put(`/content/${id}`, data),
+  delete: (id) => apiClient.delete(`/content/${id}`),
+  updateProgress: (id, progress) => apiClient.patch(`/content/${id}/progress`, { reading_progress: progress }),
+  acceptTags: (id, tags) => apiClient.post(`/content/${id}/accept-tags`, { tags }),
   getList: (params) => apiClient.get('/content', { params }),
+  getTags: () => apiClient.get('/tags'), // New endpoint
+};
+
+// Backwards compatibility for documentAPI
+export const documentAPI = {
+  getAll: (params) => contentAPI.getList(params),
 };
 
 // Collections APIs
@@ -76,16 +76,16 @@ export const collectionAPI = {
     apiClient.post('/collections', { name, description, color, icon, is_pinned: isPinned }),
   getAll: (includeEmpty, sort) =>
     apiClient.get('/collections', { params: { include_empty: includeEmpty, sort } }),
-  get: (id) => apiClient.get('/collections/' + id),
-  update: (id, data) => apiClient.put('/collections/' + id, data),
-  delete: (id) => apiClient.delete('/collections/' + id),
+  get: (id) => apiClient.get(`/collections/${id}`),
+  update: (id, data) => apiClient.put(`/collections/${id}`, data),
+  delete: (id) => apiClient.delete(`/collections/${id}`),
   addDocuments: (collectionId, contentIds) =>
-    apiClient.post('/collections/' + collectionId + '/content', { content_ids: contentIds }),
+    apiClient.post(`/collections/${collectionId}/content`, { content_ids: contentIds }),
   removeDocument: (collectionId, documentId) =>
-    apiClient.delete('/collections/' + collectionId + '/content/' + documentId),
-  getForDocument: (documentId) => apiClient.get('/collections/document/' + documentId),
+    apiClient.delete(`/collections/${collectionId}/content/${documentId}`),
+  getForDocument: (documentId) => apiClient.get(`/collections/document/${documentId}`),
   getContent: (collectionId, page, pageSize, sort) =>
-    apiClient.get('/collections/' + collectionId + '/content', { params: { page, page_size: pageSize, sort } }),
+    apiClient.get(`/collections/${collectionId}/content`, { params: { page, page_size: pageSize, sort } }),
   reorder: (orderedIds) => apiClient.put('/collections/reorder', { ordered_ids: orderedIds }),
 };
 
@@ -99,22 +99,22 @@ export const searchAPI = {
     apiClient.delete('/search/history'),
   getSaved: () =>
     apiClient.get('/search/saved'),
-  savSearch: (name, query, mode) =>
+  saveSearch: (name, query, mode) =>
     apiClient.post('/search/saved', { name, query, mode }),
   deleteSaved: (searchId) =>
-    apiClient.delete('/search/saved/' + searchId),
+    apiClient.delete(`/search/saved/${searchId}`),
 };
 
 // Annotations APIs
 export const annotationAPI = {
   create: (contentId, annotationData) =>
-    apiClient.post('/content/' + contentId + '/annotations', annotationData),
+    apiClient.post(`/content/${contentId}/annotations`, annotationData),
   getForContent: (contentId) =>
-    apiClient.get('/content/' + contentId + '/annotations'),
+    apiClient.get(`/content/${contentId}/annotations`),
   update: (annotationId, data) =>
-    apiClient.put('/annotations/' + annotationId, data),
+    apiClient.put(`/annotations/${annotationId}`, data),
   delete: (annotationId) =>
-    apiClient.delete('/annotations/' + annotationId),
+    apiClient.delete(`/annotations/${annotationId}`),
   list: (params) =>
     apiClient.get('/annotations', { params }),
   export: (format = 'markdown') =>
@@ -179,7 +179,7 @@ export const importExportAPI = {
     });
   },
   getImportStatus: (jobId) =>
-    apiClient.get('/import/status/' + jobId),
+    apiClient.get(`/import/status/${jobId}`),
 };
 
 // Preferences APIs

@@ -31,7 +31,7 @@ class ContentNotFoundError(Exception):
 class ContentService:
 
     @staticmethod
-    def create_from_url(db: Session, url: str, owner_id: str, background_tasks: BackgroundTasks = None) -> Content:
+    async def create_from_url(db: Session, url: str, owner_id: str, background_tasks: BackgroundTasks = None) -> Content:
         # Check for duplicate URL
         existing = db.query(Content).filter(Content.source_url == url, Content.user_id == owner_id).first()
         if existing:
@@ -42,8 +42,8 @@ class ContentService:
                 title=existing.title
             )
         
-        # Scrape the URL
-        data = ContentScraper.scrape_url(url)
+        # Scrape the URL asynchronously
+        data = await ContentScraper.scrape_url(url)
         
         # Parse domain from URL
         parsed_url = urlparse(url)
@@ -101,7 +101,6 @@ class ContentService:
             db.refresh(content)
         except IntegrityError as e:
             db.rollback()
-            print(f"IntegrityError during save: {e}")
             raise DuplicateURLError(f"URL '{url}' has already been saved.")
         
         # Trigger background enrichment

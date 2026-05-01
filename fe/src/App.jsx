@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { authAPI, documentAPI, contentAPI, collectionAPI } from './services/api';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { authAPI, contentAPI, collectionAPI } from './services/api';
 import ErrorBoundary from './components/ErrorBoundary';
 import Landing from './components/Landing';
 import Layout from './components/Layout';
@@ -15,64 +15,46 @@ import ExplorePage from './components/ExplorePage';
 import AnnotationsPage from './components/AnnotationsPage';
 import InsightsPage from './components/InsightsPage';
 import SettingsPage from './components/SettingsPage';
+import AddContentView from './components/AddContentView';
 import QuickSaveModal from './components/QuickSaveModal';
 import OfflineBanner from './components/common/OfflineBanner';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
+import VerifyEmail from './components/VerifyEmail';
+import ResetPassword from './components/ResetPassword';
 import './App.css';
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
-  // Current page/view state
-  const [currentPage, setCurrentPage] = useState('dashboard');
-  const [currentPageParams, setCurrentPageParams] = useState(null);
-  
-  // Documents state
+  // Global App State
   const [documents, setDocuments] = useState([]);
-  
-  // Collections state
   const [collections, setCollections] = useState([]);
-  
-  // Tags state (extracted from documents)
   const [allTags, setAllTags] = useState([]);
-  
-  // Search state
-  const [searchQuery, setSearchQuery] = useState('');
-  const searchBarRef = useRef(null);
-  
-  // Collections state
-  const [selectedCollection, setSelectedCollection] = useState(null);
-  const [currentCollectionDetail, setCurrentCollectionDetail] = useState(null);
-  const [collectionsRefreshTrigger, setCollectionsRefreshTrigger] = useState(0);
-  const [showAddToCollection, setShowAddToCollection] = useState(false);
-  const [selectedDocumentForCollection, setSelectedDocumentForCollection] = useState(null);
-  
-  // Quick save modal state
-  const [showQuickSave, setShowQuickSave] = useState(false);
-  
-  // Form states
-  const [urlInput, setUrlInput] = useState('');
-  const [manualTitle, setManualTitle] = useState('');
-  const [manualContent, setManualContent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   
+  // Modals state
+  const [showQuickSave, setShowQuickSave] = useState(false);
+  const [showAddToCollection, setShowAddToCollection] = useState(false);
+  const [selectedDocumentForCollection, setSelectedDocumentForCollection] = useState(null);
+  
   // Dark mode state
   const [isDarkMode, setIsDarkMode] = useState(false);
-  
-  // Check authentication on app load and when triggered
+
+  // Check authentication on app load
   const checkAuth = async () => {
     try {
       const token = localStorage.getItem('smartkeep_auth_token');
       if (token) {
-        // Try to fetch current user to verify token is valid
         await authAPI.me();
         setIsAuthenticated(true);
-        // Await both so documents are loaded before isCheckingAuth becomes false
-        await Promise.all([fetchDocuments(), fetchCollections()]);
+        await Promise.all([fetchDocuments(), fetchCollections(), fetchTags()]);
       } else {
         setIsAuthenticated(false);
       }
@@ -85,63 +67,49 @@ function App() {
       setIsCheckingAuth(false);
     }
   };
+
+  const handleLogout = () => {
+    localStorage.removeItem('smartkeep_auth_token');
+    localStorage.removeItem('smartkeep_user');
+    setIsAuthenticated(false);
+    setDocuments([]);
+    setCollections([]);
+    setAllTags([]);
+    window.location.href = '/';
+  };
   
   useEffect(() => {
     checkAuth();
   }, []);
   
-  // Keyboard shortcuts
-  useKeyboardShortcuts({
-    's': () => setShowQuickSave(true),
-    'f': () => {
-      // Focus the search bar
-      const searchInput = document.querySelector('input[type="search"], input[placeholder*="Search"]');
-      if (searchInput) {
-        searchInput.focus();
-      } else {
-        // Navigate to search page
-        setCurrentPage('search');
-      }
-    },
-  }, { enabled: true, ignoreInputKeys: [] });
-  
+  // Fetch global data
   const fetchCollections = async () => {
     try {
       const response = await collectionAPI.getAll(true, 'newest');
-      // Backend returns { collections: [], total }
       setCollections(response.data.collections || []);
     } catch (err) {
       console.error('Failed to fetch collections:', err);
     }
   };
-  
 
+  const fetchTags = async () => {
+    try {
+      const response = await contentAPI.getTags();
+      setAllTags(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch tags:', err);
+    }
+  };
 
-  const fetchDocuments = async (collectionId = null) => {
+  const fetchDocuments = async () => {
     setIsLoading(true);
     try {
-      let response;
-      if (collectionId) {
-        response = await collectionAPI.getContent(collectionId);
-        setDocuments(response.data.items || []);
-      } else {
-        response = await documentAPI.getAll();
-        const docs = response.data.items || [];
-        setDocuments(docs);
-        
-        // Extract unique tags from all documents
-        const tagsSet = new Set();
-        docs.forEach(doc => {
-          if (doc.tags && Array.isArray(doc.tags)) {
-            doc.tags.forEach(tag => tagsSet.add(tag));
-          }
-          if (doc.suggested_tags && Array.isArray(doc.suggested_tags)) {
-            doc.suggested_tags.forEach(tag => tagsSet.add(tag));
-          }
-        });
-        setAllTags(Array.from(tagsSet));
-        return docs;
-      }
+      const response = await contentAPI.getList();
+      const docs = response.data.items || [];
+      setDocuments(docs);
+      
+      // Extract unique tags logic moved to fetchTags() for better performance
+      fetchTags();
     } catch (err) {
       console.error(err);
       setError('Failed to fetch documents');
@@ -150,439 +118,125 @@ function App() {
     }
   };
 
-  const handleNavigate = (page, params = null) => {
-    setCurrentPage(page);
-    // Support both the old {selectedItem} pattern and direct params
-    setCurrentPageParams(params?.selectedItem !== undefined ? params.selectedItem : params);
-    clearMessages();
-    
-    // Refresh data when navigating to key pages
-    if (page === 'library' || page === 'dashboard') {
-      fetchDocuments();
-      fetchCollections();
-    }
-  };
-
-  // Placeholder for collection selection (to be implemented)
-  const _handleCollectionSelect = (collectionId) => {
-    setSelectedCollection(collectionId);
-    fetchDocuments(collectionId);
-  };
-
-  const handleAddToCollection = (docId) => {
-    setSelectedDocumentForCollection(docId);
-    setShowAddToCollection(true);
-  };
-
-  const extractErrorMessage = (err, defaultMessage) => {
-    const detail = err.response?.data?.detail;
-    if (detail) {
-      if (typeof detail === 'string') return detail;
-      if (typeof detail === 'object' && detail.message) return detail.message;
-      return JSON.stringify(detail);
-    }
-    return err.response?.data?.message || err.message || defaultMessage;
-  };
-
-  const handleURLSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setSuccessMessage(null);
-    
-    try {
-      await contentAPI.createFromURL(urlInput);
-      setSuccessMessage('Document saved! AI enrichment will complete shortly.');
-      setUrlInput('');
-      await fetchDocuments();
-      setCurrentPage('library');
-    } catch (err) {
-      const status = err.response?.status;
-      if (status === 409) {
-        // URL already exists — show it in the library
-        const detail = err.response?.data?.detail;
-        const title = typeof detail === 'object' ? detail.title : null;
-        setSuccessMessage(title ? `"${title}" is already in your library.` : 'This URL is already saved — showing your library.');
-        await fetchDocuments();
-        setCurrentPage('library');
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    's': () => setShowQuickSave(true),
+    'f': () => {
+      const searchInput = document.querySelector('input[type="search"], input[placeholder*="Search"]');
+      if (searchInput) {
+        searchInput.focus();
       } else {
-        setError(extractErrorMessage(err, 'Failed to fetch URL content'));
+        navigate('/app/search');
       }
-    }
-  };
+    },
+  }, { enabled: true, ignoreInputKeys: [] });
 
-  const handleManualSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    setSuccessMessage(null);
-    
-    try {
-      await contentAPI.createManual(manualTitle, manualContent);
-      setSuccessMessage('Document saved! AI enrichment will complete shortly.');
-      setManualTitle('');
-      setManualContent('');
-      await fetchDocuments();
-      setCurrentPage('library');
-    } catch (err) {
-      setError(extractErrorMessage(err, 'Failed to create document'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Quick save handler
   const handleQuickSave = async (data) => {
     setIsLoading(true);
     setError(null);
-    
     try {
       if (data.url) {
         await contentAPI.createFromURL(data.url);
-        setSuccessMessage('Document saved!');
       } else if (data.title && data.content) {
         await contentAPI.createManual(data.title, data.content);
-        setSuccessMessage('Document saved!');
       }
       await fetchDocuments();
       setShowQuickSave(false);
-      setCurrentPage('library');
+      navigate('/app/library');
+      setSuccessMessage('Document saved!');
     } catch (err) {
-      setError(extractErrorMessage(err, 'Failed to save'));
-      throw err; // Re-throw so the modal knows it failed
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : (detail?.message || err.message));
+      throw err;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSearch = (query) => {
-    if (!query.trim()) return;
-    
-    setSearchQuery(query);
-    setCurrentPage('search');
-  };
-
-  const handleReEnrich = async (docId) => {
-    try {
-      await contentAPI.enrich(docId);
-      setSuccessMessage('Enrichment triggered! This may take a moment.');
-      fetchDocuments();
-    } catch (err) {
-      setError('Failed to trigger enrichment: ' + extractErrorMessage(err, 'Unknown error'));
-    }
-  };
-
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-    // Could save preference to backend here
-  };
-
-  const clearMessages = () => {
-    setError(null);
-    setSuccessMessage(null);
-  };
-
-  const getDifficultyBadge = (score) => {
-    if (score === null || score === undefined) return null;
-    
-    let level, className;
-    if (score >= 60) {
-      level = 'Easy';
-      className = 'badge-easy';
-    } else if (score >= 30) {
-      level = 'Intermediate';
-      className = 'badge-intermediate';
-    } else {
-      level = 'Advanced';
-      className = 'badge-advanced';
-    }
-    
-    return <span className={`difficulty-badge ${className}`}>{level}</span>;
-  };
-
-  const getReadingTime = (minutes) => {
-    if (minutes === null || minutes === undefined) return null;
-    if (minutes < 1) return '< 1 min read';
-    if (minutes === 1) return '1 min read';
-    return `~${Math.round(minutes)} min read`;
-  };
-
-  const getEnrichmentStatus = (status) => {
-    if (status === 'complete') {
-      return <span className="enrichment-status complete">✓ Enriched</span>;
-    } else if (status === 'processing') {
-      return <span className="enrichment-status processing">⏳ Processing...</span>;
-    } else if (status === 'failed') {
-      return <span className="enrichment-status failed">⚠ Failed</span>;
-    }
-    return <span className="enrichment-status pending">⏳ Pending</span>;
-  };
-
-  // Determine which view to show based on currentPage
-  const renderContent = () => {
-    switch (currentPage) {
-      case 'dashboard':
-        return (
-          <Dashboard
-            documents={documents}
-            onNavigate={handleNavigate}
-            onSelectDocument={(doc) => handleNavigate('content-detail', { id: doc.id })}
-          />
-        );
-      case 'library':
-        return (
-          <Library
-            documents={documents}
-            collections={collections}
-            tags={allTags}
-            onSelectDocument={(doc) => handleNavigate('content-detail', { id: doc.id })}
-            onRefresh={fetchDocuments}
-          />
-        );
-      case 'documents':
-        return renderDocumentsView();
-      case 'add':
-        return renderAddView();
-      case 'search':
-        return <SearchPage initialQuery={searchQuery} />;
-      case 'content-detail':
-        return (
-          <ContentDetailPage
-            contentId={currentPageParams?.id || currentPageParams}
-            onNavigate={handleNavigate}
-            onDeleteDocument={(id) => {
-              setDocuments(documents.filter(d => d.id !== id));
-            }}
-          />
-        );
-      case 'collections':
-        return (
-          <CollectionsPage
-            onNavigate={handleNavigate}
-            onSelectCollection={(collection) => {
-              setCurrentCollectionDetail(collection);
-            }}
-            refreshTrigger={collectionsRefreshTrigger}
-          />
-        );
-      case 'collection-detail':
-        return (
-          <CollectionDetailPage
-            collection={currentPageParams?.collection || currentCollectionDetail}
-            onNavigate={handleNavigate}
-            onBack={() => {
-              setCurrentCollectionDetail(null);
-              setCurrentPage('collections');
-              setCollectionsRefreshTrigger(t => t + 1);
-            }}
-          />
-        );
-      case 'explore':
-        return <ExplorePage onNavigate={handleNavigate} />;
-      case 'annotations':
-        return (
-          <AnnotationsPage
-            onNavigate={handleNavigate}
-          />
-        );
-      case 'insights':
-        return <InsightsPage />;
-      case 'settings':
-        return <SettingsPage onThemeChange={(theme) => setIsDarkMode(theme === 'dark')} />;
-      default:
-        return renderDocumentsView();
-    }
-  };
-
-  const renderDocumentsView = () => (
-    <div className="documents-view">
-      <div className="documents-layout">
-        <h2>
-          {selectedCollection ? 'Collection Documents' : 'All Documents'}
-        </h2>
-        {isLoading && (
-          <div className="loading-indicator">
-            <div className="spinner"></div>
-            <span>Loading documents...</span>
-          </div>
-        )}
-        {documents.length === 0 && !isLoading ? (
-          <div className="empty-state">
-            <p>No documents yet.</p>
-            <button onClick={() => setCurrentPage('add')} className="btn primary">
-              Add your first document
-            </button>
-          </div>
-        ) : (
-          <div className="documents-grid">
-            {documents.map((doc) => (
-              <div key={doc.id} className="document-card">
-                <h3>{doc.title}</h3>
-                
-                {/* AI Enrichment Info */}
-                <div className="document-ai-info">
-                  {getEnrichmentStatus(doc.enrichment_status)}
-                  {doc.reading_time && (
-                    <span className="reading-time">📖 {getReadingTime(doc.reading_time)}</span>
-                  )}
-                  {doc.difficulty_score && getDifficultyBadge(doc.difficulty_score)}
-                </div>
-                
-                {/* Summary (if available) */}
-                {doc.summary && (
-                  <p className="document-summary">
-                    <strong>Summary:</strong> {doc.summary}
-                  </p>
-                )}
-                
-                <p className="document-content">
-                  {doc.content.length > 150 
-                    ? doc.content.substring(0, 150) + '...' 
-                    : doc.content}
-                </p>
-                
-                {/* Suggested Tags */}
-                {doc.suggested_tags && doc.suggested_tags.length > 0 && (
-                  <div className="suggested-tags">
-                    <strong>Suggested tags:</strong> 
-                    {doc.suggested_tags.map((tag, idx) => (
-                      <span key={idx} className="tag">{tag}</span>
-                    ))}
-                  </div>
-                )}
-                
-                <div className="document-meta">
-                  {doc.domain && <span className="domain">{doc.domain}</span>}
-                  {doc.source_url && (
-                    <a href={doc.source_url} target="_blank" rel="noopener noreferrer" className="source-link">
-                      View Source
-                    </a>
-                  )}
-                  <button 
-                    className="add-to-collection-btn"
-                    onClick={() => handleAddToCollection(doc.id)}
-                    title="Add to collection"
-                  >
-                    📁
-                  </button>
-                  {doc.enrichment_status === 'failed' || doc.enrichment_status === 'pending' ? (
-                    <button 
-                      className="re-enrich-btn"
-                      onClick={() => handleReEnrich(doc.id)}
-                    >
-                      Re-enrich
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderAddView = () => (
-    <div className="add-content-view">
-      <h2 style={{ borderBottom: '4px solid', paddingBottom: '1rem', marginBottom: '2rem', fontSize: '2.5rem' }}>INGEST CONTENT</h2>
-      
-      <div className="add-options">
-        <div className="add-option config-panel">
-          <h3 style={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>/// OUTBOUND FETCH</h3>
-          <form onSubmit={handleURLSubmit}>
-            <div className="form-group">
-              <label htmlFor="url">TARGET_URL:</label>
-              <input
-                type="url"
-                id="url"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="https://..."
-                required
-                disabled={isLoading}
-                style={{ fontFamily: 'monospace', padding: '1.5rem', fontSize: '1.25rem' }}
-              />
-            </div>
-            <button type="submit" className="btn primary" disabled={isLoading} style={{ width: '100%', padding: '1.5rem', fontSize: '1.25rem' }}>
-              {isLoading ? <><span className="spinner-small"></span> EXECUTING...</> : 'INITIATE EXTRACTION'}
-            </button>
-          </form>
-          <p className="form-hint" style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--text-color)', color: 'var(--bg-color)', fontWeight: 'bold' }}>
-            &gt; Content will be pushed to the enrichment pipeline automatically.
-          </p>
-        </div>
-
-        <div className="divider" style={{ opacity: 0 }}></div>
-
-        <div className="add-option config-panel">
-          <h3 style={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>/// DIRECT INPUT</h3>
-          <form onSubmit={handleManualSubmit}>
-            <div className="form-group">
-              <label htmlFor="title">SYS.TITLE:</label>
-              <input
-                type="text"
-                id="title"
-                value={manualTitle}
-                onChange={(e) => setManualTitle(e.target.value)}
-                placeholder="IDENTIFIER..."
-                required
-                disabled={isLoading}
-                style={{ fontFamily: 'monospace' }}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="content">RAW.PAYLOAD:</label>
-              <textarea
-                id="content"
-                value={manualContent}
-                onChange={(e) => setManualContent(e.target.value)}
-                placeholder="CONTENT_BLOB..."
-                rows={8}
-                required
-                disabled={isLoading}
-                style={{ fontFamily: 'monospace' }}
-              />
-            </div>
-            <button type="submit" className="btn primary" disabled={isLoading} style={{ width: '100%' }}>
-              {isLoading ? <><span className="spinner-small"></span> COMMITTING...</> : 'COMMIT_RECORD'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Show loading spinner while checking authentication
   if (isCheckingAuth) {
     return (
       <div className="auth-loading">
         <div className="spinner"></div>
-        <span>Loading...</span>
+        <span>Initializing...</span>
       </div>
     );
   }
+
+  const AppRoutes = () => (
+    <Routes>
+      <Route index element={<Dashboard documents={documents} />} />
+      <Route path="library" element={
+        <Library 
+          documents={documents} 
+          collections={collections} 
+          tags={allTags} 
+          onRefresh={fetchDocuments}
+          onSelectDocument={(doc) => navigate(`/app/content/${doc.id}`)}
+          onAddToCollection={(docId) => {
+            setSelectedDocumentForCollection(docId);
+            setShowAddToCollection(true);
+          }}
+        />
+      } />
+      <Route path="search" element={<SearchPage />} />
+      <Route path="add" element={
+        <AddContentView 
+          onAddSuccess={(msg) => {
+            setSuccessMessage(msg);
+            fetchDocuments();
+            navigate('/app/library');
+          }}
+          onError={setError}
+          isLoading={isLoading}
+        />
+      } />
+      <Route path="content/:id" element={
+        <ContentDetailPage 
+          onDeleteDocument={(id) => {
+            setDocuments(docs => docs.filter(d => d.id !== id));
+            navigate('/app/library');
+          }}
+        />
+      } />
+      <Route path="collections" element={
+        <CollectionsPage
+          onNavigate={(view, params) => {
+            if (view === 'collection-detail' && params?.collection?.id) {
+              navigate(`/app/collections/${params.collection.id}`);
+            }
+          }}
+        />
+      } />
+      <Route path="collections/:id" element={<CollectionDetailPage />} />
+      <Route path="explore" element={<ExplorePage />} />
+      <Route path="annotations" element={<AnnotationsPage />} />
+      <Route path="insights" element={<InsightsPage />} />
+      <Route path="settings" element={<SettingsPage onThemeChange={(theme) => setIsDarkMode(theme === 'dark')} />} />
+      <Route path="*" element={<Navigate to="/app" replace />} />
+    </Routes>
+  );
 
   return (
     <ErrorBoundary>
       <Routes>
         <Route path="/" element={isAuthenticated ? <Navigate to="/app" replace /> : <Landing />} />
         
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/login" element={isAuthenticated ? <Navigate to="/app" replace /> : <Landing forceLogin={true} />} />
+        
         <Route path="/app/*" element={
           !isAuthenticated ? <Navigate to="/" replace /> : (
           <>
-            {/* Offline Banner */}
             <OfflineBanner />
-            
             <Layout
-                currentPage={currentPage}
-                onNavigate={handleNavigate}
-                documents={documents}
                 isDarkMode={isDarkMode}
-                onToggleDarkMode={toggleDarkMode}
-                onSearch={handleSearch}
-                onOpenSettings={() => setCurrentPage('settings')}
+                onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+                documents={documents}
+                tags={allTags}
+                onLogout={handleLogout}
             >
-              <div className={`app ${isDarkMode ? 'dark-mode' : ''}`}>
-                  {/* Alerts */}
+              <div className={`app-container ${isDarkMode ? 'dark-mode' : ''}`}>
                   {error && (
                     <div className="alert error">
                       {error}
@@ -597,27 +251,18 @@ function App() {
                     </div>
                   )}
 
-                {/* Main Content */}
                 <div className="main-content">
-                  {renderContent()}
+                  <AppRoutes />
                 </div>
               </div>
 
-                {/* Add to Collection Modal */}
               <AddToCollectionModal
                   isOpen={showAddToCollection}
-                  onClose={() => {
-                    setShowAddToCollection(false);
-                    setSelectedDocumentForCollection(null);
-                  }}
+                  onClose={() => setShowAddToCollection(false)}
                   documentId={selectedDocumentForCollection}
-                  documentTitle={documents.find(d => d.id === selectedDocumentForCollection)?.title}
-                  onSuccess={() => {
-                    fetchDocuments(selectedCollection);
-                  }}
+                  onSuccess={() => fetchDocuments()}
               />
 
-              {/* Quick Save Modal */}
               <QuickSaveModal
                 isOpen={showQuickSave}
                 onClose={() => setShowQuickSave(false)}

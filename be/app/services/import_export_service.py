@@ -15,6 +15,7 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.models.content import Content
 from app.models.collection import Collection, ContentCollection
 from app.models.annotation import Annotation
@@ -341,6 +342,7 @@ def bulk_import_task(job_id: str, urls: List[Dict[str, str]]) -> None:
             # Create a new session for this task
             db = SessionLocal()
             try:
+                db.execute(text("SET SESSION app.bypass_rls = 'on'"))
                 # Try to create content from URL
                 # Note: We don't use background_tasks here to avoid nested tasks
                 # Instead, we call the service directly

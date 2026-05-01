@@ -366,9 +366,11 @@ def reorder_collections(
 
 
 @router.get("/content/{content_id}", response_model=List[CollectionResponse])
+@router.get("/document/{content_id}", response_model=List[CollectionResponse])  # alias used by frontend
 def get_collections_for_content(content_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Get all collections that contain specific content.
+    Accessible via /collections/content/{id} or /collections/document/{id}
     """
     from app.models.content import Content
     

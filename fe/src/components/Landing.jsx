@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { authAPI } from "../services/api";
+import { useGoogleLogin } from '@react-oauth/google';
 import './Landing.css';
 
 /* ─── FLIM.AI STYLE FLOATING UI SHARDS ──────────────────────────
@@ -14,18 +15,19 @@ const SEARCH_RESULTS = [
   { title: "Why JVM Garbage Collection Feels Slow", snip: <><mark>Memory management</mark> in GC vs ownership-based languages compared.</>, score: "0.81", c: "#60b4f0" },
 ];
 
-export default function Landing() {
+export default function Landing({ forceLogin = false }) {
   const curRef = useRef(null);
   const ringRef = useRef(null);
   const [url, setUrl] = useState("");
   const [saved, setSaved] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'register'
+  const [showAuthModal, setShowAuthModal] = useState(forceLogin);
+  const [authMode, setAuthMode] = useState(forceLogin ? 'login' : 'register'); // 'login', 'register', or 'forgot-password'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [passwordWarning, setPasswordWarning] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const navigate = useNavigate();
 
   // Check password length as user types and prevent exceeding 72 bytes
@@ -58,25 +60,49 @@ export default function Landing() {
     return () => window.removeEventListener("mousemove", mv);
   }, []);
 
+  // Check for GitHub OAuth callback code
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    
+    if (code) {
+      setLoading(true);
+      setError('');
+      setShowAuthModal(true);
+      
+      // Clean up URL right away
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      authAPI.socialLogin(code, 'github')
+        .then(response => {
+          localStorage.setItem('smartkeep_auth_token', response.data.access_token);
+          window.location.href = '/app';
+        })
+        .catch(err => {
+          setError(err.response?.data?.detail || 'Failed to authenticate with GitHub');
+          setLoading(false);
+        });
+    }
+  }, []);
+
   const handleAuth = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
-    // Validate email
-    if (!email || !email.includes('@')) {
-      setError('Please enter a valid email address');
-      setLoading(false);
-      return;
+
+    if (authMode === 'forgot-password') {
+      try {
+        await authAPI.forgotPassword(email);
+        setSuccessMessage('If an account exists, a reset link has been sent to your email.');
+        setLoading(false);
+        return;
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Failed to send reset link');
+        setLoading(false);
+        return;
+      }
     }
-    
-    // Validate password
-    if (!password || password.length < 6) {
-      setError('Password must be at least 6 characters');
-      setLoading(false);
-      return;
-    }
-    
+
     try {
       let token;
       if (authMode === 'login') {
@@ -85,9 +111,11 @@ export default function Landing() {
       } else {
         // Register the user
         await authAPI.register(email, password);
-        // Login immediately after successful registration
-        const response = await authAPI.login(email, password);
-        token = response.data.access_token;
+        // Inform user to check email
+        setSuccessMessage('Registration successful! Please check your email to verify your account.');
+        setAuthMode('login');
+        setLoading(false);
+        return;
       }
       
       // Save token to localStorage
@@ -101,7 +129,10 @@ export default function Landing() {
     } catch (err) {
       let errorMsg = 'Authentication failed';
       const detail = err.response?.data?.detail;
-      if (err.userMessage) {
+      
+      if (err.response?.status === 403 && detail?.includes('verified')) {
+        errorMsg = 'Email not verified. Please check your inbox for the verification link.';
+      } else if (err.userMessage) {
         errorMsg = err.userMessage;
       } else if (detail) {
         if (typeof detail === 'string') {
@@ -122,6 +153,35 @@ export default function Landing() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loginWithGoogle = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setLoading(true);
+      setError('');
+      try {
+        // Send the access token to backend
+        const response = await authAPI.socialLogin(tokenResponse.access_token, 'google');
+        localStorage.setItem('smartkeep_auth_token', response.data.access_token);
+        window.location.href = '/app';
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Failed to authenticate with Google');
+        setLoading(false);
+      }
+    },
+    onError: () => {
+      setError('Google login failed or was cancelled');
+    }
+  });
+
+  const handleGitHubLogin = () => {
+    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
+    if (!clientId) {
+      setError('GitHub client ID is not configured');
+      return;
+    }
+    const redirectUri = window.location.origin; // Will redirect back to Landing page
+    window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=user:email`;
   };
 
   const doSave = () => {
@@ -159,54 +219,103 @@ export default function Landing() {
         <div className="auth-modal-overlay" onClick={() => setShowAuthModal(false)}>
           <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
             <button className="close-btn" onClick={() => setShowAuthModal(false)}>×</button>
-            <h2>{authMode === 'login' ? 'Login' : 'Register'}</h2>
+            <h2>
+              {authMode === 'login' ? 'Welcome Back' : 
+               authMode === 'register' ? 'Create Account' : 
+               'Reset Password'}
+            </h2>
             
-            <form onSubmit={handleAuth}>
-              <div className="form-group">
-                <label htmlFor="email">Email</label>
-                <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  required
-                  disabled={loading}
-                />
+            {successMessage ? (
+              <div className="auth-success-state">
+                <div className="success-icon">✓</div>
+                <p>{successMessage}</p>
+                <button onClick={() => setSuccessMessage('')} className="btn primary w-full mt-4">
+                  Back to Login
+                </button>
               </div>
-              
-              <div className="form-group">
-                <label htmlFor="password">Password</label>
-                <input
-                  type="password"
-                  id="password"
-                  value={password}
-                  onChange={handlePasswordChange}
-                  placeholder="••••••••"
-                  required
-                  disabled={loading}
-                />
-                {passwordWarning && <div className="password-warning">{passwordWarning}</div>}
-              </div>
-              
-              {error && <div className="auth-error">{error}</div>}
-              
-              <button type="submit" disabled={loading} className="btn primary" style={{ width: '100%' }}>
-                {loading ? 'Loading...' : (authMode === 'login' ? 'Login' : 'Register')}
-              </button>
-            </form>
-            
-            <div className="auth-toggle">
-              {authMode === 'login' ? (
-                <>
-                  Don't have an account? <button onClick={() => { setAuthMode('register'); setError(''); }} className="link-btn">Register</button>
-                </>
-              ) : (
-                <>
-                  Already have an account? <button onClick={() => { setAuthMode('login'); setError(''); }} className="link-btn">Login</button>
-                </>
-              )}
-            </div>
+            ) : (
+              <>
+                <form onSubmit={handleAuth}>
+                  <div className="form-group">
+                    <label htmlFor="email">Email</label>
+                    <input
+                      type="email"
+                      id="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="your@email.com"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  
+                  {authMode !== 'forgot-password' && (
+                    <div className="form-group">
+                      <div className="label-row">
+                        <label htmlFor="password">Password</label>
+                        {authMode === 'login' && (
+                          <button 
+                            type="button" 
+                            className="link-btn small-link"
+                            onClick={() => { setAuthMode('forgot-password'); setError(''); }}
+                          >
+                            Forgot?
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="password"
+                        id="password"
+                        value={password}
+                        onChange={handlePasswordChange}
+                        placeholder="••••••••"
+                        required
+                        disabled={loading}
+                      />
+                      {passwordWarning && <div className="password-warning">{passwordWarning}</div>}
+                    </div>
+                  )}
+                  
+                  {error && <div className="auth-error">{error}</div>}
+                  
+                  <button type="submit" disabled={loading} className="btn primary" style={{ width: '100%' }}>
+                    {loading ? 'Processing...' : (
+                      authMode === 'login' ? 'Sign In' : 
+                      authMode === 'register' ? 'Join SmartKeep' : 
+                      'Send Reset Link'
+                    )}
+                  </button>
+                </form>
+                
+                {authMode !== 'forgot-password' && (
+                  <div className="social-auth-section">
+                    <div className="divider"><span>or continue with</span></div>
+                    <div className="social-btns">
+                      <button type="button" onClick={() => loginWithGoogle()} className="social-btn google" disabled={loading}>
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google" />
+                        Google
+                      </button>
+                      <button type="button" onClick={handleGitHubLogin} className="social-btn github" disabled={loading}>
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Octicons-mark-github.svg" alt="GitHub" />
+                        GitHub
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="auth-toggle">
+                  {authMode === 'login' ? (
+                    <>
+                      New to SmartKeep? <button onClick={() => { setAuthMode('register'); setError(''); }} className="link-btn">Create an account</button>
+                    </>
+                  ) : (
+                    <>
+                      Already have an account? <button onClick={() => { setAuthMode('login'); setError(''); }} className="link-btn">Sign in</button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

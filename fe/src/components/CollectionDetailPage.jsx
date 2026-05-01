@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { collectionAPI, searchAPI } from '../services/api';
 
 // Add Items Modal Component
@@ -31,9 +32,9 @@ function AddItemsModal({ isOpen, onClose, collectionId, onItemsAdded }) {
     debounceRef.current = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const response = await searchAPI.search(searchQuery, 'bm25', { limit: 20 });
+        const response = await searchAPI.search(searchQuery, 'keyword', { limit: 20 });
         // Filter out items already in the collection
-        setSearchResults(response.data.results || []);
+        setSearchResults(response.data.items || []);
       } catch (err) {
         console.error('Search failed:', err);
         setSearchResults([]);
@@ -158,13 +159,31 @@ function AddItemsModal({ isOpen, onClose, collectionId, onItemsAdded }) {
 }
 
 // Collection Detail Page Component
-function CollectionDetailPage({ collection, onNavigate, onBack }) {
+function CollectionDetailPage({ collection: collectionProp, onNavigate, onBack }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [collection, setCollection] = useState(collectionProp || null);
+  const [collectionLoading, setCollectionLoading] = useState(!collectionProp);
   const [documents, setDocuments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
-  const [description, setDescription] = useState(collection?.description || '');
+  const [description, setDescription] = useState(collectionProp?.description || '');
   const [showAddItems, setShowAddItems] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Fetch collection metadata if not passed as prop
+  useEffect(() => {
+    if (!collectionProp && id) {
+      setCollectionLoading(true);
+      collectionAPI.get(id)
+        .then(res => {
+          setCollection(res.data);
+          setDescription(res.data.description || '');
+        })
+        .catch(err => console.error('Failed to load collection:', err))
+        .finally(() => setCollectionLoading(false));
+    }
+  }, [id, collectionProp]);
   
   // View mode
   const [viewMode, setViewMode] = useState('grid');
@@ -187,6 +206,7 @@ function CollectionDetailPage({ collection, onNavigate, onBack }) {
   const [hasNext, setHasNext] = useState(false);
 
   const fetchDocuments = async () => {
+    if (!collection?.id) return;
     setIsLoading(true);
     try {
       const response = await collectionAPI.getContent(
@@ -308,12 +328,7 @@ function CollectionDetailPage({ collection, onNavigate, onBack }) {
   const handleDeleteCollection = async () => {
     try {
       await collectionAPI.delete(collection.id);
-      if (onBack) {
-        onBack();
-      }
-      if (onNavigate) {
-        onNavigate('collections');
-      }
+      navigate('/app/collections');
     } catch (err) {
       console.error('Failed to delete collection:', err);
     }
@@ -351,11 +366,29 @@ function CollectionDetailPage({ collection, onNavigate, onBack }) {
     setStatus('all');
   };
 
+  // Show loading while fetching collection metadata
+  if (collectionLoading) {
+    return (
+      <div className="loading-state" style={{ padding: '80px', textAlign: 'center' }}>
+        <div className="spinner" />
+        <span>Loading collection...</span>
+      </div>
+    );
+  }
+
+  if (!collection) {
+    return (
+      <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+        Collection not found.
+      </div>
+    );
+  }
+
   return (
     <div className="collection-detail-page">
       {/* Collection Header */}
       <div className="collection-header">
-        <button className="back-btn" onClick={onBack || (() => onNavigate && onNavigate('collections'))}>
+        <button className="back-btn" onClick={() => navigate('/app/collections')}>
           ← Back to Collections
         </button>
         
@@ -579,7 +612,7 @@ function CollectionDetailPage({ collection, onNavigate, onBack }) {
             <div 
               key={doc.id} 
               className="doc-card"
-              onClick={() => onNavigate && onNavigate('content-detail', { id: doc.id })}
+              onClick={() => navigate(`/app/content/${doc.id}`)}
             >
               {viewMode === 'grid' && (
                 <>

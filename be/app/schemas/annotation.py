@@ -64,8 +64,8 @@ class AnnotationResponse(BaseModel):
 
 class AnnotationWithSourceResponse(AnnotationResponse):
     """Schema for annotation with parent content info (used in global annotations page)."""
-    content_title: str
-    content_domain: str
+    content_title: Optional[str] = ''
+    content_domain: Optional[str] = ''
     content_favicon_url: Optional[str] = None
     content_tags: List[str] = []
 
