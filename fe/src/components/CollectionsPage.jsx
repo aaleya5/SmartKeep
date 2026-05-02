@@ -33,7 +33,10 @@ function SortableCollectionCard({ collection, onClick, onEdit, onDelete, isNewCa
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: collection?.id || 'new-card' });
+  } = useSortable({ 
+    id: collection?.id || 'new-card',
+    disabled: isNewCard 
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -45,7 +48,7 @@ function SortableCollectionCard({ collection, onClick, onEdit, onDelete, isNewCa
   const fetchRecentItems = async () => {
     if (!collection?.id) return;
     try {
-      const response = await collectionAPI.getContent(collection.id, 1, 3, 'newest');
+      const response = await collectionAPI.getContent(collection.id, { page: 1, page_size: 3, sort: 'newest' });
       setRecentItems(response.data.items || []);
     } catch (err) {
       console.error('Failed to fetch recent items:', err);
@@ -86,8 +89,11 @@ function SortableCollectionCard({ collection, onClick, onEdit, onDelete, isNewCa
         {...listeners}
       >
         <div className="new-card-content">
-          <div className="new-icon">+</div>
-          <span className="new-label">New Collection</span>
+          <div className="new-icon-circle">
+            <div className="new-icon">+</div>
+          </div>
+          <span className="new-label">Create New Collection</span>
+          <p className="new-hint">Organize your saves</p>
         </div>
       </div>
     );

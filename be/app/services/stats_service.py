@@ -40,8 +40,8 @@ class StatsService:
         domain_result = db.query(
             Content.domain,
             func.count(Content.id).label('count')
-        ).group_by(Content.domain).order_by(func.count(Content.id).desc()).first()
-        most_saved_domain = domain_result[0] if domain_result else ""
+        ).filter(Content.domain.isnot(None)).group_by(Content.domain).order_by(func.count(Content.id).desc()).first()
+        most_saved_domain = domain_result[0] if domain_result and domain_result[0] else "None"
         
         # Calculate streaks
         current_streak, longest_streak = StatsService._calculate_streaks(db)
@@ -62,48 +62,45 @@ class StatsService:
         # Get all dates with saves
         result = db.query(
             func.date(Content.created_at).label('date')
-        ).distinct().order_by(func.date(Content.created_at).desc()).all()
+        ).distinct().all()
         
         if not result:
             return 0, 0
         
+        # Sort dates ascending: [oldest, ..., newest]
         save_dates = sorted(set([r.date for r in result]))
         
-        current_streak = 0
         longest_streak = 0
         temp_streak = 0
-        streak_start = None
-        
-        today = date.today()
         
         for i, d in enumerate(save_dates):
             if i == 0:
-                if d >= today - timedelta(days=1):
-                    temp_streak = 1
-                    streak_start = d
-                else:
-                    temp_streak = 1
+                temp_streak = 1
             else:
                 prev = save_dates[i - 1]
-                if d == prev - timedelta(days=1):
+                if d == prev + timedelta(days=1):
                     temp_streak += 1
                 else:
                     if temp_streak > longest_streak:
                         longest_streak = temp_streak
                     temp_streak = 1
-                    streak_start = d
         
         if temp_streak > longest_streak:
             longest_streak = temp_streak
         
-        # Check if current streak is active (today or yesterday)
+        # Calculate current streak
+        current_streak = 0
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        
         if save_dates:
-            latest = save_dates[0]
-            if latest >= today - timedelta(days=1):
-                # Count backwards from latest
+            latest = save_dates[-1]
+            # Streak is active only if saved today or yesterday
+            if latest == today or latest == yesterday:
                 current_streak = 1
-                for i in range(1, len(save_dates)):
-                    if save_dates[i] == save_dates[i-1] - timedelta(days=1):
+                # Count backwards from the end
+                for i in range(len(save_dates) - 2, -1, -1):
+                    if save_dates[i] == save_dates[i+1] - timedelta(days=1):
                         current_streak += 1
                     else:
                         break
@@ -171,11 +168,11 @@ class StatsService:
         result = db.query(
             Content.domain,
             func.count(Content.id).label('value')
-        ).group_by(Content.domain).order_by(
+        ).filter(Content.domain.isnot(None)).group_by(Content.domain).order_by(
             func.count(Content.id).desc()
         ).limit(limit).all()
         
-        return [{"label": r.domain, "value": r.value} for r in result]
+        return [{"label": r.domain if r.domain else "Unknown", "value": r.value} for r in result]
     
     @staticmethod
     def get_tag_distribution(db: Session, limit: int = 15) -> List[Dict[str, Any]]:

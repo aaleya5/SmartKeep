@@ -13,6 +13,7 @@ class SortEnum(str, Enum):
     reading_time_desc = "reading_time_desc"
     alpha_asc = "alpha_asc"
     alpha_desc = "alpha_desc"
+    date_read = "date_read"
 
 
 class DifficultyEnum(str, Enum):
@@ -23,8 +24,9 @@ class DifficultyEnum(str, Enum):
 
 class EnrichmentStatusEnum(str, Enum):
     pending = "pending"
-    processing = "processing"
-    complete = "complete"
+    scraping = "scraping"
+    enriching = "enriching"
+    ready = "ready"
     failed = "failed"
 
 
@@ -80,6 +82,7 @@ class ContentResponse(BaseModel):
     reading_progress: float = 0.0
     enrichment_status: str = "pending"
     published_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None
     last_opened_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
@@ -124,6 +127,24 @@ class BulkDeleteResponse(BaseModel):
 
 class BulkTagsResponse(BaseModel):
     updated_count: int
+
+
+class BulkMarkReadRequest(BaseModel):
+    content_ids: List[UUID]
+    is_read: bool = True
+
+
+class BulkMarkReadResponse(BaseModel):
+    updated_count: int
+
+
+class BulkExportRequest(BaseModel):
+    content_ids: List[UUID]
+
+
+class BulkExportResponse(BaseModel):
+    items: List[ContentDetailResponse]
+    export_date: datetime = Field(default_factory=datetime.now)
 
 
 class EnrichQueuedResponse(BaseModel):

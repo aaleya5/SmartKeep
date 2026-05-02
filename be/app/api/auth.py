@@ -24,8 +24,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         
     # Enable PostgreSQL Row-Level Security for this session
     db.execute(text("SET SESSION app.current_user_id = :user_id"), {'user_id': str(user.id)})
-    db.commit()
-    db.refresh(user)
+    # Removed db.commit() to prevent 500 errors on GET requests
     
     return user
 

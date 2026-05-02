@@ -1,28 +1,9 @@
 from sqlalchemy import Column, String, Text, DateTime, Index, Boolean, Float, CheckConstraint, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import TSVECTOR, UUID, ARRAY
-from sqlalchemy.types import TypeDecorator, TEXT
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 from app.db.base import Base
-
-
-class VectorType(TypeDecorator):
-    """Custom type that uses JSONB for pgvector storage."""
-    impl = TEXT
-    cache_ok = True
-
-    def load_dialect_impl(self, dialect):
-        if dialect.name == 'postgresql':
-            return dialect.type_descriptor(ARRAY(Float))
-        return dialect.type_descriptor(TEXT)
-
-    def process_result_value(self, value, dialect):
-        return value
-
-    def process_bind_param(self, value, dialect):
-        return value
-
-
 import uuid
 
 class Content(Base):
@@ -51,7 +32,7 @@ class Content(Base):
     # AI enrichment
     summary = Column(Text, nullable=True)
     suggested_tags = Column(ARRAY(Text), nullable=False, server_default='{}')
-    embedding = Column(ARRAY(Float), nullable=True)
+    embedding = Column(Vector(384), nullable=True)
     readability_score = Column(Float, nullable=True)
     difficulty = Column(Text, nullable=True)
     enrichment_status = Column(String(20), nullable=False, server_default='pending')
@@ -60,6 +41,7 @@ class Content(Base):
     # Reading state
     reading_progress = Column(Float, nullable=False, server_default='0.0')
     is_read = Column(Boolean, nullable=False, server_default='false')
+    read_at = Column(DateTime(timezone=True), nullable=True)
     last_opened_at = Column(DateTime(timezone=True), nullable=True)
     
     # Ownership
@@ -76,12 +58,13 @@ class Content(Base):
     __table_args__ = (
         CheckConstraint('reading_progress >= 0.0 AND reading_progress <= 1.0', name='ck_reading_progress'),
         CheckConstraint("difficulty IN ('easy', 'intermediate', 'advanced')", name='ck_difficulty'),
-        CheckConstraint("enrichment_status IN ('pending', 'processing', 'complete', 'failed')", name='ck_enrichment_status'),
+        CheckConstraint("enrichment_status IN ('pending', 'scraping', 'enriching', 'ready', 'failed', 'processing', 'complete')", name='ck_enrichment_status'),
         Index('idx_content_created_at', 'created_at'),
         Index('idx_content_last_opened', 'last_opened_at'),
+        Index('idx_content_read_at', 'read_at'),
         Index('idx_content_tags', 'tags', postgresql_using='gin'),
         Index('idx_content_search_vector_gin', 'search_vector', postgresql_using='gin'),
-        Index('idx_content_embedding_gin', 'embedding', postgresql_using='gin'),
+        Index('idx_content_embedding_hnsw', 'embedding', postgresql_using='hnsw', postgresql_with={'m': 16, 'ef_construction': 64}, postgresql_ops={'embedding': 'vector_cosine_ops'}),
     )
     
     @property

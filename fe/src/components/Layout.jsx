@@ -10,6 +10,7 @@ function Layout({
   isDarkMode,
   onToggleDarkMode,
   tags = [],
+  collections = [],
   recentSaves = [],
   onOpenKeyboardShortcuts,
   onLogout
@@ -53,6 +54,7 @@ function Layout({
         <Sidebar
           onQuickSave={() => navigate('/app/add')}
           tags={tags}
+          collections={collections}
           recentSaves={recentSaves}
           isDarkMode={isDarkMode}
           onToggleDarkMode={onToggleDarkMode}

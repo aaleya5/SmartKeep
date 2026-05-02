@@ -65,18 +65,43 @@ class ContentScraper:
                 logger.error(f"Failed to scrape Reddit using PRAW: {e}. Falling back to standard scraper.")
         
         # Standard scraping flow for non-Reddit or fallback
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            async with httpx.AsyncClient(headers=headers, timeout=15.0, follow_redirects=True) as client:
-                response = await client.get(url)
-                response.raise_for_status()
-                html = response.text
-        except httpx.RequestError as e:
-            raise ValueError(f"Unable to fetch URL: {str(e)}")
-        except httpx.HTTPStatusError as e:
-            raise ValueError(f"Server returned error {e.response.status_code}: {e.response.reason_phrase}")
+        # Implement retry logic for standard scraping
+        max_scrape_retries = 2
+        last_error = None
+        
+        for attempt in range(max_scrape_retries + 1):
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
+                    'Cache-Control': 'max-age=0',
+                }
+                # Increase timeout on each attempt
+                current_timeout = 10.0 + (attempt * 5.0)
+                
+                async with httpx.AsyncClient(headers=headers, timeout=current_timeout, follow_redirects=True) as client:
+                    response = await client.get(url)
+                    response.raise_for_status()
+                    html = response.text
+                    break # Success!
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                last_error = e
+                if attempt < max_scrape_retries:
+                    wait_time = 1.0 * (2 ** attempt)
+                    logger.warning(f"Scrape attempt {attempt+1} failed for {url}: {str(e)}. Retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(f"All scrape attempts failed for {url}: {str(e)}")
+                    raise ValueError(f"Unable to fetch URL after {max_scrape_retries+1} attempts: {str(e)}")
 
         soup = BeautifulSoup(html, "html.parser")
         
@@ -161,20 +186,20 @@ class ContentScraper:
         # 1. Look for article tag
         article = soup.find("article")
         if article:
-            content = self._extract_text_from_element(article)
+            content = ContentScraper._extract_text_from_element(article)
         
         # 2. Look for main tag
         if not content or len(content) < 200:
             main = soup.find("main")
             if main:
-                content = self._extract_text_from_element(main)
+                content = ContentScraper._extract_text_from_element(main)
         
         # 3. Look for common content IDs/classes
         if not content or len(content) < 200:
             for selector in ['#content', '.content', '.post-content', '.article-body', '#main-content', '.entry-content']:
                 el = soup.select_one(selector)
                 if el:
-                    content = self._extract_text_from_element(el)
+                    content = ContentScraper._extract_text_from_element(el)
                     if len(content) > 500:
                         break
         
@@ -189,7 +214,7 @@ class ContentScraper:
                     best_div = div
             
             if best_div:
-                content = self._extract_text_from_element(best_div)
+                content = ContentScraper._extract_text_from_element(best_div)
         
         # 5. Last resort: all paragraphs
         if not content:

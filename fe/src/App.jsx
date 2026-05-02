@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { authAPI, contentAPI, collectionAPI } from './services/api';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -107,8 +107,6 @@ function App() {
       const response = await contentAPI.getList();
       const docs = response.data.items || [];
       setDocuments(docs);
-      
-      // Extract unique tags logic moved to fetchTags() for better performance
       fetchTags();
     } catch (err) {
       console.error(err);
@@ -153,6 +151,17 @@ function App() {
     }
   };
 
+  const handleDeleteDocument = async (id) => {
+    try {
+      await contentAPI.delete(id);
+      setDocuments(docs => docs.filter(d => d.id !== id));
+      setSuccessMessage('Document deleted');
+    } catch (err) {
+      console.error('Failed to delete document:', err);
+      setError('Failed to delete document');
+    }
+  };
+
   if (isCheckingAuth) {
     return (
       <div className="auth-loading">
@@ -172,13 +181,14 @@ function App() {
           tags={allTags} 
           onRefresh={fetchDocuments}
           onSelectDocument={(doc) => navigate(`/app/content/${doc.id}`)}
+          onDeleteDocument={handleDeleteDocument}
           onAddToCollection={(docId) => {
             setSelectedDocumentForCollection(docId);
             setShowAddToCollection(true);
           }}
         />
       } />
-      <Route path="search" element={<SearchPage />} />
+      <Route path="search" element={<SearchPage onDeleteDocument={handleDeleteDocument} />} />
       <Route path="add" element={
         <AddContentView 
           onAddSuccess={(msg) => {
@@ -192,8 +202,9 @@ function App() {
       } />
       <Route path="content/:id" element={
         <ContentDetailPage 
+          collections={collections}
           onDeleteDocument={(id) => {
-            setDocuments(docs => docs.filter(d => d.id !== id));
+            handleDeleteDocument(id);
             navigate('/app/library');
           }}
         />
@@ -233,6 +244,7 @@ function App() {
                 isDarkMode={isDarkMode}
                 onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
                 documents={documents}
+                collections={collections}
                 tags={allTags}
                 onLogout={handleLogout}
             >

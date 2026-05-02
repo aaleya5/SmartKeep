@@ -440,5 +440,55 @@ class CollectionService:
         return collections
 
 
+    @staticmethod
+    def get_uncollected_content(
+        db: Session,
+        owner_id: str,
+        limit: int = 100,
+        offset: int = 0,
+        sort: str = "newest"
+    ) -> List[Content]:
+        """Get content not assigned to any collection."""
+        from app.models.content import Content
+        
+        # Subquery for all content IDs in any collection
+        subquery = db.query(ContentCollection.content_id)
+        
+        query = db.query(Content).filter(
+            Content.user_id == owner_id,
+            ~Content.id.in_(subquery)
+        )
+        
+        if sort == "newest":
+            query = query.order_by(Content.created_at.desc())
+        elif sort == "oldest":
+            query = query.order_by(Content.created_at.asc())
+        elif sort == "last_opened":
+            query = query.order_by(Content.last_opened_at.desc().nullslast())
+        elif sort == "reading_time_asc":
+            query = query.order_by(Content.word_count.asc())
+        elif sort == "reading_time_desc":
+            query = query.order_by(Content.word_count.desc())
+        elif sort == "alpha_asc":
+            query = query.order_by(Content.title.asc())
+        elif sort == "alpha_desc":
+            query = query.order_by(Content.title.desc())
+        elif sort == "date_read":
+            query = query.order_by(Content.read_at.desc().nullslast())
+            
+        return query.offset(offset).limit(limit).all()
+
+    @staticmethod
+    def get_uncollected_content_count(db: Session, owner_id: str) -> int:
+        """Get the count of content not assigned to any collection."""
+        from app.models.content import Content
+        subquery = db.query(ContentCollection.content_id)
+        count = db.query(func.count(Content.id)).filter(
+            Content.user_id == owner_id,
+            ~Content.id.in_(subquery)
+        ).scalar()
+        return count or 0
+
+
 # Singleton instance
 collection_service = CollectionService()

@@ -15,6 +15,10 @@ from app.schemas.content import (
     BulkDeleteRequest,
     BulkDeleteResponse,
     BulkTagsResponse,
+    BulkMarkReadRequest,
+    BulkMarkReadResponse,
+    BulkExportRequest,
+    BulkExportResponse,
     EnrichQueuedResponse,
     AcceptTagsRequest,
     ProgressUpdateRequest,
@@ -37,19 +41,19 @@ from datetime import datetime
 router = APIRouter(prefix="/content", tags=["Content"])
 
 
-@router.post("", response_model=ContentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ContentResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_from_url(request: ContentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
-    Create content from URL.
+    Create content from URL (Async).
     
     - Validates URL format
+    - Normalizes URL
     - Checks for duplicate
-    - Scrapes content
-    - Saves to database
-    - Triggers background enrichment
+    - Saves a "stub" to database
+    - Triggers background scraping & enrichment
     
-    Returns 201 with enrichment_status: "pending"
-    Errors: 409 if duplicate, 422 if invalid URL, 502 if unreachable
+    Returns 202 Accepted with enrichment_status: "pending"
+    Errors: 409 if duplicate, 422 if invalid URL
     """
     try:
         return await ContentService.create_from_url(db, str(request.url), str(current_user.id), background_tasks)
@@ -113,6 +117,7 @@ def get_content_list(
     is_read: Optional[bool] = Query(None, description="Filter by read status"),
     enrichment_status: Optional[EnrichmentStatusEnum] = Query(None, description="Enrichment status"),
     is_truncated: Optional[bool] = Query(None, description="Filter by truncation status"),
+    uncollected_only: bool = Query(False, description="Only show items not in any collection"),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user, use_cache=False),
 ):
@@ -155,6 +160,8 @@ def get_content_list(
             is_read=is_read,
             enrichment_status=enrichment_status.value if enrichment_status else None,
             is_truncated=is_truncated,
+            collection_id=collection_id,
+            uncollected_only=uncollected_only,
         )
         
         has_next = (page * page_size) < total
@@ -230,6 +237,24 @@ def bulk_delete_content(request: BulkDeleteRequest, db: Session = Depends(get_db
     """
     deleted_count = ContentService.bulk_delete(db, str(current_user.id), request.content_ids)
     return BulkDeleteResponse(deleted_count=deleted_count)
+
+
+@router.patch("/bulk/read", response_model=BulkMarkReadResponse)
+def bulk_mark_read(request: BulkMarkReadRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Bulk mark content as read/unread.
+    """
+    updated_count = ContentService.bulk_mark_read(db, str(current_user.id), request.content_ids, request.is_read)
+    return BulkMarkReadResponse(updated_count=updated_count)
+
+
+@router.post("/bulk/export", response_model=BulkExportResponse)
+def bulk_export(request: BulkExportRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Bulk export content metadata.
+    """
+    items = ContentService.bulk_export(db, str(current_user.id), request.content_ids)
+    return BulkExportResponse(items=items)
 
 
 @router.post("/{content_id}/enrich", response_model=EnrichQueuedResponse, status_code=status.HTTP_202_ACCEPTED)

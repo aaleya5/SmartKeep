@@ -35,6 +35,7 @@ def search(
     date_to: Optional[date] = Query(None, description="Filter by date to (ISO)"),
     difficulty: Optional[str] = Query(None, description="Filter by difficulty"),
     collection_id: Optional[UUID] = Query(None, description="Filter by collection ID"),
+    is_read: Optional[bool] = Query(None, description="Filter by reading status"),
     limit: int = Query(20, ge=1, le=100, description="Number of results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db),
@@ -50,7 +51,8 @@ def search(
     - **date_from**: Filter items created after this date
     - **date_to**: Filter items created before this date
     - **difficulty**: Filter by difficulty (easy, intermediate, advanced)
-    - **collection_id**: Filter by collection (not implemented yet)
+    - **collection_id**: Filter by collection
+    - **is_read**: Filter by read/unread status
     - **limit**: Number of results to return (max 100)
     - **offset**: Offset for pagination
     
@@ -77,6 +79,8 @@ def search(
         date_from=date_from_dt,
         date_to=date_to_dt,
         difficulty=difficulty,
+        is_read=is_read,
+        collection_id=collection_id,
     )
     
     # Log to search history (only for non-empty results)
@@ -97,6 +101,10 @@ def search(
         filters_applied['date_to'] = str(date_to)
     if difficulty:
         filters_applied['difficulty'] = difficulty
+    if is_read is not None:
+        filters_applied['is_read'] = is_read
+    if collection_id:
+        filters_applied['collection_id'] = str(collection_id)
     
     # Convert items to response format
     items = []

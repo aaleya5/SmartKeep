@@ -31,83 +31,63 @@ class ContentNotFoundError(Exception):
 class ContentService:
 
     @staticmethod
+    def normalize_url(url: str) -> str:
+        """
+        Normalize URL by:
+        - Removing trailing slashes
+        - Converting to lowercase (domain part)
+        - Removing common tracking parameters (utm_*)
+        """
+        parsed = urlparse(url)
+        # Lowercase domain
+        netloc = parsed.netloc.lower()
+        # Remove tracking params
+        query = parsed.query
+        if query:
+            from urllib.parse import parse_qsl, urlencode
+            params = parse_qsl(query)
+            params = [(k, v) for k, v in params if not k.startswith('utm_')]
+            query = urlencode(params)
+        
+        path = parsed.path.rstrip('/')
+        if not path: path = ""
+        
+        normalized = parsed._replace(netloc=netloc, path=path, query=query, fragment="").geturl()
+        return normalized
+
+    @staticmethod
     async def create_from_url(db: Session, url: str, owner_id: str, background_tasks: BackgroundTasks = None) -> Content:
-        # Check for duplicate URL
-        existing = db.query(Content).filter(Content.source_url == url, Content.user_id == owner_id).first()
+        # Normalize URL for duplicate checking
+        normalized_url = ContentService.normalize_url(url)
+        
+        # Check for duplicate URL (using normalized version)
+        existing = db.query(Content).filter(Content.source_url == normalized_url, Content.user_id == owner_id).first()
         if existing:
             raise DuplicateURLError(
-                f"URL '{url}' has already been saved.",
+                f"URL already saved.",
                 content_id=existing.id,
                 saved_at=existing.created_at,
                 title=existing.title
             )
         
-        # Scrape the URL asynchronously
-        data = await ContentScraper.scrape_url(url)
-        
-        # Parse domain from URL
-        parsed_url = urlparse(url)
-        domain = parsed_url.netloc
-        
-        # Calculate word count
-        body = data.get("content", "")
-        word_count = len(body.split()) if body else 0
-        
-        # Check if content needs truncation
-        is_truncated = False
-        if len(body) > settings.MAX_CONTENT_LENGTH:
-            body = body[:settings.MAX_CONTENT_LENGTH] + "... [truncated]"
-            is_truncated = True
-            word_count = len(body.split())
-        
-        # Calculate readability metrics
-        readability = analyze_readability(body)
-        
-        # Determine difficulty level
-        difficulty = None
-        if readability.get("flesch_kincaid_score"):
-            score = readability["flesch_kincaid_score"]
-            if score >= 60:
-                difficulty = "easy"
-            elif score >= 30:
-                difficulty = "intermediate"
-            else:
-                difficulty = "advanced"
-        
+        # Save a "stub" record immediately
+        # We use the raw URL as provided but the normalized one for future checks
         content = Content(
-            source_url=url,
-            domain=domain,
-            title=data.get("title", "Untitled"),
-            body=body,
-            author=data.get("author"),
-            og_image_url=data.get("og_image_url"),
-            favicon_url=data.get("favicon_url"),
-            published_at=data.get("published_at"),
-            word_count=word_count,
-            is_truncated=is_truncated,
-            tags=[],
-            suggested_tags=[],
+            source_url=normalized_url,
+            title="Processing...", # Placeholder title
             enrichment_status="pending",
-            readability_score=readability.get("flesch_kincaid_score"),
-            difficulty=difficulty,
-            reading_progress=0.0,
-            is_read=False,
             user_id=owner_id,
         )
         
-        try:
-            db.add(content)
-            db.commit()
-            db.refresh(content)
-        except IntegrityError as e:
-            db.rollback()
-            raise DuplicateURLError(f"URL '{url}' has already been saved.")
+        db.add(content)
+        db.commit()
+        db.refresh(content)
         
-        # Trigger background enrichment
+        # Trigger background scraping and enrichment
         if background_tasks:
             background_tasks.add_task(enrichment_service.enrich_content, str(content.id))
         else:
-            # Run synchronously for testing
+            # For testing/sync environments
             enrichment_service.enrich_content(str(content.id))
         
         return content
@@ -202,13 +182,34 @@ class ContentService:
         is_read: Optional[bool] = None,
         enrichment_status: Optional[str] = None,
         is_truncated: Optional[bool] = None,
+        collection_id: Optional[UUID] = None,
+        uncollected_only: bool = False,
     ) -> Tuple[List[Content], int]:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Fetching content list for user {owner_id}. Filters: tags={tags}, domain={domain}, sort={sort}")
+        
         query = db.query(Content).filter(Content.user_id == owner_id)
         
         # Apply filters
+        if collection_id:
+            from app.models.collection import ContentCollection
+            query = query.join(ContentCollection, Content.id == ContentCollection.content_id)\
+                         .filter(ContentCollection.collection_id == collection_id)
+        
+        if uncollected_only:
+            from app.models.collection import ContentCollection
+            query = query.filter(~Content.id.in_(db.query(ContentCollection.content_id)))
+
         if tags:
             for tag in tags:
-                query = query.filter(Content.tags.contains([tag]))
+                # Filter content that has the tag in either user-assigned 'tags' or 'suggested_tags'
+                query = query.filter(
+                    or_(
+                        Content.tags.contains([tag]),
+                        Content.suggested_tags.contains([tag])
+                    )
+                )
         
         if domain:
             query = query.filter(Content.domain == domain)
@@ -257,6 +258,8 @@ class ContentService:
             query = query.order_by(Content.title.asc())
         elif sort == "alpha_desc":
             query = query.order_by(Content.title.desc())
+        elif sort == "date_read":
+            query = query.order_by(Content.read_at.desc().nullslast())
         
         # Apply pagination
         offset = (page - 1) * page_size
@@ -297,13 +300,42 @@ class ContentService:
         return deleted_count
 
     @staticmethod
+    def bulk_mark_read(db: Session, owner_id: str, content_ids: List[UUID], is_read: bool = True) -> int:
+        now = datetime.utcnow() if is_read else None
+        updated_count = db.query(Content).filter(
+            Content.user_id == owner_id, 
+            Content.id.in_(content_ids)
+        ).update(
+            {Content.is_read: is_read, Content.read_at: now, Content.reading_progress: 1.0 if is_read else 0.0},
+            synchronize_session=False
+        )
+        db.commit()
+        return updated_count
+
+    @staticmethod
+    def bulk_export(db: Session, owner_id: str, content_ids: List[UUID]) -> List[dict]:
+        items = db.query(Content).filter(Content.user_id == owner_id, Content.id.in_(content_ids)).all()
+        export_data = []
+        for item in items:
+            export_data.append({
+                "title": item.title,
+                "source_url": item.source_url,
+                "summary": item.summary,
+                "tags": item.tags,
+                "notes": item.notes,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "is_read": item.is_read
+            })
+        return export_data
+
+    @staticmethod
     def trigger_enrichment(db: Session, content_id: UUID, owner_id: str, background_tasks: BackgroundTasks = None) -> Content:
         content = db.query(Content).filter(Content.id == content_id, Content.user_id == owner_id).first()
         if not content:
             raise ContentNotFoundError(f"Content {content_id} not found")
         
         # Reset enrichment status
-        content.enrichment_status = "processing"
+        content.enrichment_status = "enriching"
         content.enrichment_error = None
         db.commit()
         
@@ -372,7 +404,12 @@ class ContentService:
         is_read = False
         if reading_progress >= 0.95:
             content.is_read = True
+            content.read_at = datetime.utcnow()
             is_read = True
+        else:
+            # If manually moved back from 100%, we might want to unset read_at
+            # but usually it's better to keep the first read date or only unset if is_read becomes false
+            pass
         
         content.updated_at = datetime.utcnow()
         db.commit()

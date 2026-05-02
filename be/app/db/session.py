@@ -6,7 +6,7 @@ from app.core.config import settings
 # Import all models here so that they are registered with SQLAlchemy's metadata
 # before any session or router accesses them, preventing mapper initialization errors.
 from app.models.user import User
-from app.models.content import Content, VectorType
+from app.models.content import Content
 from app.models.collection import Collection, ContentCollection
 from app.models.annotation import Annotation
 from app.models.search import SearchHistory, SavedSearch

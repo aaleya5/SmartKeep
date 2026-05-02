@@ -9,6 +9,7 @@ import {
 function Sidebar({ 
   onQuickSave,
   tags = [],
+  collections = [],
   recentSaves = [],
   isDarkMode,
   onToggleDarkMode,
@@ -107,6 +108,27 @@ function Sidebar({
                 #{tag.name}
               </button>
             ))}
+          </div>
+        </div>
+        
+        {/* Collections Section */}
+        <div className="sidebar-section">
+          <h4 className="section-title">COLLECTIONS</h4>
+          <div className="recent-list">
+            {collections.map((collection) => (
+              <NavLink 
+                key={collection.id} 
+                to={`/app/collections/${collection.id}`}
+                className={({ isActive }) => `recent-item ${isActive ? 'active' : ''}`}
+                style={{ textDecoration: 'none' }}
+              >
+                <span className="collection-bullet" style={{ color: collection.color || 'var(--accent-color)' }}>•</span>
+                <span className="recent-title">{collection.name}</span>
+              </NavLink>
+            ))}
+            {collections.length === 0 && (
+              <span className="empty-hint">No collections yet</span>
+            )}
           </div>
         </div>
 
@@ -247,6 +269,7 @@ function Sidebar({
         .sidebar-scrollable::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
 
         .sidebar-section { padding: 16px 0; border-top: 1px solid var(--border-color); }
+        .sidebar-section:first-child { border-top: none; padding-top: 0; }
         .section-title {
           font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em;
           color: var(--text-secondary); margin-bottom: 12px; font-weight: 500;
@@ -266,14 +289,20 @@ function Sidebar({
           display: flex; align-items: center; padding: 8px 10px;
           border-radius: 6px; border: none;
           background: transparent; cursor: pointer; text-align: left; width: 100%;
-          transition: background 0.15s;
+          transition: all 0.15s;
         }
         .recent-item:hover { background: rgba(255, 255, 255, 0.03); }
+        .recent-item.active { background: rgba(245, 200, 66, 0.05); }
+        .recent-item.active .recent-title { color: var(--accent-color); font-weight: 600; }
+        
+        .collection-bullet { margin-right: 8px; font-size: 18px; line-height: 1; }
         .recent-title {
           font-family: var(--font-sans); font-size: 12px; font-weight: 400; color: var(--text-secondary);
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         .recent-item:hover .recent-title { color: var(--text-color); }
+
+        .empty-hint { font-size: 11px; color: var(--text-secondary); opacity: 0.6; padding: 0 10px; }
 
         .sidebar-bottom {
           padding: 16px; border-top: 1px solid var(--border-color);

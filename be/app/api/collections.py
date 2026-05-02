@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
+from datetime import datetime
 
 from app.db.session import get_db
 from app.models.user import User
@@ -24,7 +25,7 @@ from app.schemas.collection import (
     AddToCollectionRequest,
     AddToCollectionResponse,
 )
-from app.schemas.content import ContentListResponse
+from app.schemas.content import ContentListResponse, SortEnum, DifficultyEnum, EnrichmentStatusEnum
 from app.services.collection_service import collection_service
 from app.services.content_service import ContentService
 
@@ -213,7 +214,17 @@ def get_collection_content(
     collection_id: UUID,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    sort: str = Query("newest", enum=["newest", "oldest", "last_opened", "reading_time_asc", "reading_time_desc", "alpha_asc", "alpha_desc"], description="Sort order"),
+    sort: str = Query("newest", description="Sort order"),
+    tags: Optional[str] = Query(None, description="Comma-separated tags (filters to items containing ALL listed tags)"),
+    domain: Optional[str] = Query(None, description="Filter by domain"),
+    date_from: Optional[datetime] = Query(None, description="Filter from date (ISO)"),
+    date_to: Optional[datetime] = Query(None, description="Filter to date (ISO)"),
+    min_reading_time: Optional[int] = Query(None, ge=0, description="Min reading time in minutes"),
+    max_reading_time: Optional[int] = Query(None, ge=0, description="Max reading time in minutes"),
+    difficulty: Optional[DifficultyEnum] = Query(None, description="Difficulty level"),
+    is_read: Optional[bool] = Query(None, description="Filter by read status"),
+    enrichment_status: Optional[EnrichmentStatusEnum] = Query(None, description="Enrichment status"),
+    is_truncated: Optional[bool] = Query(None, description="Filter by truncation status"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -230,21 +241,43 @@ def get_collection_content(
             detail=f"Collection {collection_id} not found"
         )
     
-    # Get content in collection
-    content_items = collection_service.get_content_in_collection(
+    # Parse tags from comma-separated string
+    tag_list = None
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    
+    # Get content in collection with filters
+    content_items, total = ContentService.get_list(
         db,
         owner_id=str(current_user.id),
+        page=page,
+        page_size=page_size,
+        sort=sort,
+        tags=tag_list,
+        domain=domain,
+        date_from=date_from,
+        date_to=date_to,
+        min_reading_time=min_reading_time,
+        max_reading_time=max_reading_time,
+        difficulty=difficulty.value if difficulty else None,
+        is_read=is_read,
+        enrichment_status=enrichment_status.value if enrichment_status else None,
+        is_truncated=is_truncated,
         collection_id=collection_id,
-        limit=page_size,
-        offset=(page - 1) * page_size,
-        sort=sort
     )
     
-    # Get total count
-    total = collection_service.get_collection_content_count(db, collection_id, str(current_user.id))
+    has_next = (page * page_size) < total
     
-    # Convert to response format
     from app.schemas.content import ContentResponse
+    items = [ContentResponse.from_orm(c) for c in content_items]
+    
+    return ContentListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_next=has_next,
+    )
     from datetime import datetime
     
     items = []
@@ -404,3 +437,74 @@ def get_collections_for_content(content_id: UUID, db: Session = Depends(get_db),
         ))
     
     return result
+
+
+@router.get("/uncollected/content", response_model=ContentListResponse)
+def get_uncollected_content(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    sort: str = Query("newest", description="Sort order"),
+    tags: Optional[str] = Query(None, description="Comma-separated tags (filters to items containing ALL listed tags)"),
+    domain: Optional[str] = Query(None, description="Filter by domain"),
+    date_from: Optional[datetime] = Query(None, description="Filter from date (ISO)"),
+    date_to: Optional[datetime] = Query(None, description="Filter to date (ISO)"),
+    min_reading_time: Optional[int] = Query(None, ge=0, description="Min reading time in minutes"),
+    max_reading_time: Optional[int] = Query(None, ge=0, description="Max reading time in minutes"),
+    difficulty: Optional[DifficultyEnum] = Query(None, description="Difficulty level"),
+    is_read: Optional[bool] = Query(None, description="Filter by read status"),
+    enrichment_status: Optional[EnrichmentStatusEnum] = Query(None, description="Enrichment status"),
+    is_truncated: Optional[bool] = Query(None, description="Filter by truncation status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get items not in any collection ("All saves").
+    """
+    # Parse tags from comma-separated string
+    tag_list = None
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    
+    content_items, total = ContentService.get_list(
+        db,
+        owner_id=str(current_user.id),
+        page=page,
+        page_size=page_size,
+        sort=sort,
+        tags=tag_list,
+        domain=domain,
+        date_from=date_from,
+        date_to=date_to,
+        min_reading_time=min_reading_time,
+        max_reading_time=max_reading_time,
+        difficulty=difficulty.value if difficulty else None,
+        is_read=is_read,
+        enrichment_status=enrichment_status.value if enrichment_status else None,
+        is_truncated=is_truncated,
+        uncollected_only=True,
+    )
+    
+    has_next = (page * page_size) < total
+    
+    from app.schemas.content import ContentResponse
+    items = [ContentResponse.from_orm(c) for c in content_items]
+    
+    return ContentListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_next=has_next,
+    )
+
+
+@router.get("/uncollected/count", response_model=dict)
+def get_uncollected_count(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get count of uncollected items.
+    """
+    count = collection_service.get_uncollected_content_count(db, str(current_user.id))
+    return {"count": count}

@@ -62,7 +62,10 @@ export const contentAPI = {
   updateProgress: (id, progress) => apiClient.patch(`/content/${id}/progress`, { reading_progress: progress }),
   acceptTags: (id, tags) => apiClient.post(`/content/${id}/accept-tags`, { tags }),
   getList: (params) => apiClient.get('/content', { params }),
-  getTags: () => apiClient.get('/tags'), // New endpoint
+  getTags: () => apiClient.get('/tags'),
+  bulkDelete: (ids) => apiClient.delete('/content/bulk', { data: { content_ids: ids } }),
+  bulkMarkRead: (ids, isRead = true) => apiClient.patch('/bulk/read', { content_ids: ids, is_read: isRead }),
+  bulkExport: (ids) => apiClient.post('/bulk/export', { content_ids: ids }),
 };
 
 // Backwards compatibility for documentAPI
@@ -84,9 +87,11 @@ export const collectionAPI = {
   removeDocument: (collectionId, documentId) =>
     apiClient.delete(`/collections/${collectionId}/content/${documentId}`),
   getForDocument: (documentId) => apiClient.get(`/collections/document/${documentId}`),
-  getContent: (collectionId, page, pageSize, sort) =>
-    apiClient.get(`/collections/${collectionId}/content`, { params: { page, page_size: pageSize, sort } }),
+  getContent: (collectionId, params) =>
+    apiClient.get(`/collections/${collectionId}/content`, { params }),
   reorder: (orderedIds) => apiClient.put('/collections/reorder', { ordered_ids: orderedIds }),
+  getUncollectedContent: (params) => apiClient.get('/collections/uncollected/content', { params }),
+  getUncollectedCount: () => apiClient.get('/collections/uncollected/count'),
 };
 
 // Search APIs
