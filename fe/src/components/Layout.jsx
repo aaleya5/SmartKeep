@@ -1,23 +1,23 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
 import CommandPalette from './CommandPalette';
 
 function Layout({
   children,
-  currentPage,
-  onNavigate,
   documents = [],
   isDarkMode,
   onToggleDarkMode,
   tags = [],
+  collections = [],
   recentSaves = [],
-  onSearch,
-  onOpenSettings,
-  onOpenKeyboardShortcuts
+  onOpenKeyboardShortcuts,
+  onLogout
 }) {
   const [isMobile, setIsMobile] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const navigate = useNavigate();
 
   // Check for mobile viewport
   useEffect(() => {
@@ -25,19 +25,14 @@ function Layout({
       setIsMobile(window.innerWidth < 768);
     };
 
-    // Initial check
     checkMobile();
-
-    // Listen for window resize
     window.addEventListener('resize', checkMobile);
-
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // Handle keyboard shortcut for command palette
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Open command palette with Cmd+K or Ctrl+K
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setIsCommandPaletteOpen(true);
@@ -48,28 +43,8 @@ function Layout({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleQuickSave = () => {
-    // Navigate to add content view
-    onNavigate('add');
-    if (isMobile) {
-      // On mobile, could open a modal instead
-    }
-  };
-
-  const handleSearch = (query) => {
-    onNavigate('search');
-    // Pass search query to parent
-    if (onSearch) {
-      onSearch(query);
-    }
-  };
-
   const handleCommandPaletteClose = () => {
     setIsCommandPaletteOpen(false);
-  };
-
-  const handleGoToSettings = () => {
-    onNavigate('settings');
   };
 
   return (
@@ -77,16 +52,14 @@ function Layout({
       {/* Desktop Sidebar - hidden on mobile */}
       {!isMobile && (
         <Sidebar
-          currentPage={currentPage}
-          onNavigate={onNavigate}
-          onQuickSave={handleQuickSave}
-          onSearch={handleSearch}
+          onQuickSave={() => navigate('/app/add')}
           tags={tags}
+          collections={collections}
           recentSaves={recentSaves}
           isDarkMode={isDarkMode}
           onToggleDarkMode={onToggleDarkMode}
-          onOpenSettings={onOpenSettings || handleGoToSettings}
           onOpenKeyboardShortcuts={onOpenKeyboardShortcuts}
+          onLogout={onLogout}
         />
       )}
 
@@ -94,9 +67,10 @@ function Layout({
       <main 
         className="main-content-area"
         style={{
-          marginLeft: isMobile ? '0' : '280px',
+          marginLeft: isMobile ? '0' : '250px',
           marginBottom: isMobile ? '64px' : '0',
-          minHeight: '100vh'
+          minHeight: '100vh',
+          width: isMobile ? '100%' : 'calc(100% - 250px)'
         }}
       >
         {children}
@@ -104,25 +78,16 @@ function Layout({
 
       {/* Mobile Bottom Navigation - hidden on desktop */}
       {isMobile && (
-        <MobileBottomNav
-          currentPage={currentPage}
-          onNavigate={onNavigate}
-          onAddClick={handleQuickSave}
-        />
+        <MobileBottomNav />
       )}
 
       {/* Command Palette */}
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={handleCommandPaletteClose}
-        onNavigate={onNavigate}
-        onQuickSave={handleQuickSave}
-        onGoToSettings={handleGoToSettings}
-        onSearch={handleSearch}
         documents={documents}
       />
 
-      {/* Global Styles */}
       <style>{`
         .app-layout {
           --sidebar-width: 250px;
@@ -135,16 +100,19 @@ function Layout({
           --tag-bg: var(--bg-color);
           --bottom-nav-bg: var(--nav-bg);
           --palette-bg: var(--bg-color);
+          display: flex;
         }
 
         .main-content-area {
           transition: margin-left 0.1s ease;
+          flex: 1;
         }
 
         /* Responsive adjustments */
         @media (max-width: 900px) {
           .main-content-area {
             margin-left: 0 !important;
+            width: 100% !important;
             padding-bottom: calc(var(--bottom-nav-height) + 20px);
           }
         }
@@ -152,16 +120,6 @@ function Layout({
         /* Ensure proper stacking */
         .app-layout {
           position: relative;
-        }
-
-        /* Sidebar z-index */
-        .app-layout > aside {
-          z-index: 100;
-        }
-
-        /* Mobile nav z-index */
-        .app-layout > nav {
-          z-index: 100;
         }
       `}</style>
     </div>

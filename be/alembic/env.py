@@ -13,6 +13,8 @@ from app.models.collection import Collection, ContentCollection
 from app.models.annotation import Annotation
 from app.models.preferences import Preferences
 from app.models.search import SearchHistory, SavedSearch
+from app.models.user import User
+from app.models.auth_token import VerificationToken, PasswordResetToken
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

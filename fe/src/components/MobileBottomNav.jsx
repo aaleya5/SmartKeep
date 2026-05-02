@@ -1,53 +1,45 @@
-function MobileBottomNav({ currentPage, onNavigate, onAddClick }) {
+import { NavLink, useNavigate } from 'react-router-dom';
+
+function MobileBottomNav({ onLogout }) {
+  const navigate = useNavigate();
+  
   const tabs = [
-    { id: 'dashboard', label: 'Home', icon: '🏠' },
-    { id: 'search', label: 'Search', icon: '🔍' },
-    { id: 'add', label: 'Add', icon: '➕', isAction: true },
-    { id: 'library', label: 'Library', icon: '📚' },
-    { id: 'profile', label: 'Profile', icon: '👤' },
+    { id: 'dashboard', label: 'Home', icon: '🏠', path: '/app' },
+    { id: 'library', label: 'Library', icon: '📚', path: '/app/library' },
+    { id: 'add', label: 'Add', icon: '➕', path: '/app/add', isAction: true },
+    { id: 'settings', label: 'Settings', icon: '👤', path: '/app/settings' },
+    { id: 'logout', label: 'Logout', icon: '🚪', onClick: onLogout },
   ];
-
-  const handleTabClick = (tab) => {
-    if (tab.isAction) {
-      onAddClick();
-    } else {
-      onNavigate(tab.id);
-    }
-  };
-
-  const getActiveTab = () => {
-    // Map current page to mobile tab
-    const pageToTab = {
-      'dashboard': 'dashboard',
-      'search': 'search',
-      'add': 'add',
-      'library': 'library',
-      'collections': 'library',
-      'explore': 'library',
-      'annotations': 'library',
-      'insights': 'library',
-      'profile': 'profile',
-      'settings': 'profile',
-    };
-    return pageToTab[currentPage] || 'dashboard';
-  };
-
-  const activeTab = getActiveTab();
 
   return (
     <nav className="mobile-bottom-nav">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          className={`mobile-tab ${activeTab === tab.id ? 'active' : ''} ${tab.isAction ? 'action-tab' : ''}`}
-          onClick={() => handleTabClick(tab)}
-        >
-          <span className={`tab-icon ${tab.isAction ? 'action-icon' : ''}`}>
-            {tab.icon}
-          </span>
-          <span className="tab-label">{tab.label}</span>
-        </button>
-      ))}
+      {tabs.map((tab) => {
+        if (tab.onClick) {
+          return (
+            <button
+              key={tab.id}
+              onClick={tab.onClick}
+              className="mobile-tab"
+            >
+              <span className="tab-icon">{tab.icon}</span>
+              <span className="tab-label">{tab.label}</span>
+            </button>
+          );
+        }
+        return (
+          <NavLink
+            key={tab.id}
+            to={tab.path}
+            className={({ isActive }) => `mobile-tab ${isActive ? 'active' : ''} ${tab.isAction ? 'action-tab' : ''}`}
+            end={tab.path === '/app'}
+          >
+            <span className={`tab-icon ${tab.isAction ? 'action-icon' : ''}`}>
+              {tab.icon}
+            </span>
+            <span className="tab-label">{tab.label}</span>
+          </NavLink>
+        );
+      })}
 
       <style>{`
         .mobile-bottom-nav {
@@ -64,6 +56,7 @@ function MobileBottomNav({ currentPage, onNavigate, onAddClick }) {
           z-index: 100;
           padding: 0 8px;
           padding-bottom: env(safe-area-inset-bottom, 8px);
+          text-decoration: none;
         }
 
         @media (max-width: 767px) {
@@ -85,6 +78,7 @@ function MobileBottomNav({ currentPage, onNavigate, onAddClick }) {
           transition: all 0.2s;
           border-radius: 12px;
           min-width: 56px;
+          text-decoration: none;
         }
 
         .mobile-tab:active {
@@ -108,7 +102,7 @@ function MobileBottomNav({ currentPage, onNavigate, onAddClick }) {
         }
 
         .mobile-tab.active .tab-label {
-          color: var(--primary, #667eea);
+          color: var(--accent-color, #667eea);
           font-weight: 600;
         }
 
@@ -121,7 +115,7 @@ function MobileBottomNav({ currentPage, onNavigate, onAddClick }) {
         .action-icon {
           width: 48px;
           height: 48px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: var(--accent-color);
           border-radius: 16px;
           display: flex;
           align-items: center;
@@ -140,32 +134,6 @@ function MobileBottomNav({ currentPage, onNavigate, onAddClick }) {
           position: absolute;
           bottom: 4px;
           font-size: 9px;
-        }
-
-        /* Hover Effects */
-        .mobile-tab:not(.action-tab):hover {
-          background: var(--hover-bg, #f3f4f6);
-        }
-
-        .mobile-tab:not(.action-tab):active {
-          background: var(--active-bg, #e0e7ff);
-        }
-
-        /* Dark Mode */
-        .mobile-bottom-nav.dark-mode {
-          --bottom-nav-bg: #1f2937;
-          --sidebar-border: #374151;
-          --hover-bg: #374151;
-          --active-bg: #4f46e5;
-          --text-secondary: #9ca3af;
-        }
-
-        .mobile-bottom-nav.dark-mode .tab-label {
-          color: #9ca3af;
-        }
-
-        .mobile-bottom-nav.dark-mode .mobile-tab.active .tab-label {
-          color: #a5b4fc;
         }
       `}</style>
     </nav>

@@ -272,6 +272,57 @@ mark, .highlight {
   padding: 0 2px;
 }
 
+/* Reader Highlights with Color Support */
+.reader-highlight {
+  cursor: pointer;
+  transition: opacity 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 3px;
+  padding: 0 2px;
+  position: relative;
+}
+
+.reader-highlight:hover {
+  opacity: 0.85;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.reader-highlight.active {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+
+/* Highlight Colors */
+.reader-highlight.highlight-yellow {
+  background-color: rgba(245, 200, 66, 0.4);
+  color: inherit;
+}
+
+.reader-highlight.highlight-green {
+  background-color: rgba(74, 222, 128, 0.3);
+  color: inherit;
+}
+
+.reader-highlight.highlight-pink {
+  background-color: rgba(236, 72, 153, 0.3);
+  color: inherit;
+}
+
+.reader-highlight.highlight-blue {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: inherit;
+}
+
+/* Highlight Popup Note */
+.highlight-popup-note {
+  display: block;
+  font-size: 0.85em;
+  font-style: italic;
+  color: #d1d5db;
+  margin-top: 2px;
+  padding: 4px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
+}
+
 /* Standard Spinner */
 .spinner-small {
   width: 16px;

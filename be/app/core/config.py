@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     
     # Groq API Configuration (for LLM summarization and tagging)
     GROQ_API_KEY: SecretStr = None  # type: ignore
+
+    # Reddit API Configuration (for scraping Reddit links via PRAW)
+    REDDIT_CLIENT_ID: Optional[str] = None
+    REDDIT_CLIENT_SECRET: Optional[SecretStr] = None
     
     # Content Processing Configuration
     MAX_CONTENT_LENGTH: int = 10000
@@ -25,6 +29,24 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "llama3-8b-8192"
     LLM_MAX_TOKENS: int = 500
     LLM_TEMPERATURE: float = 0.3
+
+    # JWT Authentication Configuration
+    JWT_SECRET_KEY: SecretStr = SecretStr("smartkeep-dev-secret")
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
+
+    # OAuth Configuration
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[SecretStr] = None
+    GITHUB_CLIENT_ID: Optional[str] = None
+    GITHUB_CLIENT_SECRET: Optional[SecretStr] = None
+
+    # Email Configuration
+    RESEND_API_KEY: Optional[SecretStr] = None
+    EMAIL_FROM: str = "noreply@smartkeep.app"
+    
+    # URL Configuration
+    FRONTEND_URL: str = "http://localhost:5173"
 
     class Config:
         env_file = ".env"

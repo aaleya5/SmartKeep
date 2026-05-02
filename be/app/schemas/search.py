@@ -24,6 +24,14 @@ class SearchRequest(BaseModel):
     offset: int = 0
 
 
+class AnnotationMatch(BaseModel):
+    id: UUID
+    selected_text: str
+    note: Optional[str] = None
+    color: str
+    relevance_score: float
+
+
 class SearchResultItem(BaseModel):
     # All fields from ContentResponse, plus:
     id: UUID
@@ -55,6 +63,7 @@ class SearchResultItem(BaseModel):
     similarity_score: Optional[float] = None   # cosine similarity for semantic
     combined_score: Optional[float] = None    # weighted score for hybrid
     matched_excerpt: Optional[str] = None     # snippet with highlighted terms (HTML-safe)
+    matched_annotations: List[AnnotationMatch] = [] # highlights/notes that matched the query
 
 
 class SearchResponse(BaseModel):

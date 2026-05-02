@@ -45,6 +45,8 @@ class Collection(Base):
     icon = Column(String(50), nullable=False, default="📁")
     is_pinned = Column(Boolean, nullable=False, server_default='false')
     sort_order = Column(Integer, nullable=False, default=0)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    owner = relationship("User", back_populates="collections")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     

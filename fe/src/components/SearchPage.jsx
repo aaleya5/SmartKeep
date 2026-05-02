@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Hash, Brain, Sparkles, Clock, Globe } from 'lucide-react';
+import { Search, Hash, Brain, Sparkles, Clock, Globe, Trash2 } from 'lucide-react';
 import { searchAPI } from '../services/api';
 
 function useDebounce(value, delay) {
@@ -38,10 +38,12 @@ function SearchModeToggle({ mode, onModeChange }) {
   );
 }
 
-function SearchResultCard({ result, query }) {
+function SearchResultCard({ result, query, onDelete }) {
+  const [deleting, setDeleting] = useState(false);
+
   const highlightTitle = (title, query) => {
     if (!query || !title) return title;
-    const words = query.toLowerCase().split(/\\s+/).filter(w => w.length > 2);
+    const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
     let highlighted = title;
     words.forEach(word => {
       const regex = new RegExp(`(${word})`, 'gi');
@@ -56,14 +58,34 @@ function SearchResultCard({ result, query }) {
     return `${(score * 100).toFixed(0)}% Match`;
   };
 
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    if (deleting) {
+      onDelete && onDelete(result.id);
+    } else {
+      setDeleting(true);
+      setTimeout(() => setDeleting(false), 3000);
+    }
+  };
+
   return (
-    <div className="result-card sleek-panel">
+    <div className={`result-card sleek-panel ${deleting ? 'confirm-delete' : ''}`}>
       <div className="result-topbar">
         <div className="domain-wrap">
           <Globe size={12} className="domain-icon" />
           <span className="result-domain">{result.domain}</span>
         </div>
-        {getScoreDisplay() && <span className="result-score badge-amber">{getScoreDisplay()}</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {getScoreDisplay() && <span className="result-score badge-amber">{getScoreDisplay()}</span>}
+          <button 
+            className={`delete-btn ${deleting ? 'active' : ''}`}
+            onClick={handleDelete}
+            title={deleting ? "Confirm delete" : "Delete"}
+          >
+            <Trash2 size={14} />
+            {deleting && <span className="confirm-text">Confirm?</span>}
+          </button>
+        </div>
       </div>
 
       <h3 className="result-title">
@@ -98,7 +120,7 @@ function SearchResultCard({ result, query }) {
   );
 }
 
-function SearchPage({ initialQuery = '' }) {
+function SearchPage({ initialQuery = '', onDeleteDocument }) {
   const [query, setQuery] = useState(initialQuery);
   const [mode, setMode] = useState('hybrid');
   const [results, setResults] = useState([]);
@@ -193,7 +215,15 @@ function SearchPage({ initialQuery = '' }) {
         {!isLoading && hasSearched && results.length > 0 && (
           <div className="search-results-list">
             {results.map((result) => (
-              <SearchResultCard key={result.id} result={result} query={query} />
+              <SearchResultCard 
+                key={result.id} 
+                result={result} 
+                query={query} 
+                onDelete={(id) => {
+                  onDeleteDocument && onDeleteDocument(id);
+                  setResults(prev => prev.filter(r => r.id !== id));
+                }}
+              />
             ))}
           </div>
         )}
@@ -480,6 +510,42 @@ function SearchPage({ initialQuery = '' }) {
 
         .no-results h3 { font-size: 1.5rem; margin-bottom: 12px; }
         .no-results p { color: var(--text-secondary); max-width: 400px; line-height: 1.5; }
+
+        .delete-btn {
+          background: transparent;
+          border: none;
+          color: var(--text-secondary);
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .delete-btn:hover {
+          color: #ef4444;
+          background: rgba(239, 68, 68, 0.1);
+        }
+
+        .delete-btn.active {
+          color: #fff;
+          background: #ef4444;
+          padding: 4px 8px;
+        }
+
+        .confirm-text {
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+
+        .result-card.confirm-delete {
+          border-color: rgba(239, 68, 68, 0.5);
+          box-shadow: 0 0 15px rgba(239, 68, 68, 0.1);
+        }
 
         .search-history {
           margin-top: 24px;

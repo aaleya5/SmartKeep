@@ -10,6 +10,7 @@ from app.api import explore
 from app.api import stats
 from app.api import preferences
 from app.api import import_export
+from app.api import auth
 
 
 api_router = APIRouter()
@@ -24,3 +25,4 @@ api_router.include_router(explore.router)
 api_router.include_router(stats.router)
 api_router.include_router(preferences.router)
 api_router.include_router(import_export.router)
+api_router.include_router(auth.router)

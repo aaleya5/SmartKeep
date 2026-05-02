@@ -11,7 +11,7 @@ The service runs asynchronously and doesn't block API responses.
 import json
 import logging
 import time
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 from groq import Groq
 from app.core.config import settings
 
@@ -53,15 +53,21 @@ Content:
 
 Summary (2-3 sentences):"""
 
-    def _build_tags_prompt(self, content: str) -> str:
+    def _build_tags_prompt(self, content: str, existing_tags: List[str] = None) -> str:
         """Build prompt for tag suggestion."""
-        return f"""You are a helpful assistant that suggests relevant tags for documents.
+        existing_context = ""
+        if existing_tags:
+            existing_context = f"\nExisting tags in the user's library: {', '.join(existing_tags)}\n"
+
+        return f"""You are a highly intelligent librarian that suggests precise, semantically relevant tags for documents.
 Given the following content, suggest 3-5 relevant tags as a JSON array of strings.
 
-Tags should be:
-- Short (1-3 words each)
-- Relevant to the main topics
-- Lowercase with hyphens for multi-word tags
+{existing_context}
+Guidelines:
+- Priority 1: Use existing tags from the list above if they are semantically relevant to the content.
+- Priority 2: Create new tags ONLY if existing tags don't cover the main topics.
+- Tags should be short (1-3 words each), lowercase, with hyphens for multi-word tags.
+- Focus on high-level concepts, specific entities, and domain-specific terminology.
 
 Content:
 {content[:3000]}
@@ -94,12 +100,37 @@ Return ONLY a JSON array, like ["tag1", "tag2", "tag3"]. No other text.:"""
         
         return None
 
-    def summarize_and_tag(self, content: str) -> Tuple[Optional[str], Optional[str]]:
+    def _build_combined_prompt(self, content: str, existing_tags: List[str] = None) -> str:
+        """Build a combined prompt for summary and tags."""
+        existing_context = ""
+        if existing_tags:
+            existing_context = f"\nExisting tags in the user's library: {', '.join(existing_tags)}\n"
+
+        return f"""You are a helpful assistant that summarizes web content and suggests precise, semantically relevant tags.
+Given the following content, return a JSON object with two fields:
+1. "summary": A brief 2-3 sentence summary that captures the main points.
+2. "tags": A list of 3-5 relevant tags.
+
+{existing_context}
+Tag Guidelines:
+- Priority 1: Use existing tags from the list above if they are semantically relevant to the content.
+- Priority 2: Create new tags ONLY if existing tags don't cover the main topics.
+- Tags should be short (1-3 words each), lowercase, with hyphens for multi-word tags.
+- Focus on high-level concepts, specific entities, and domain-specific terminology.
+
+Content:
+{content[:4000]}
+
+Return ONLY a JSON object. Example:
+{{"summary": "This is a brief summary...", "tags": ["tag1", "tag2", "tag3"]}}"""
+
+    def summarize_and_tag(self, content: str, existing_tags: List[str] = None) -> Tuple[Optional[str], Optional[str]]:
         """
-        Generate summary and suggested tags for content.
+        Generate summary and suggested tags for content in a single pass.
         
         Args:
             content: The text content to summarize and tag
+            existing_tags: List of existing tags in the user's library for semantic consistency
             
         Returns:
             Tuple of (summary, suggested_tags_json) or (None, None) if failed
@@ -109,66 +140,42 @@ Return ONLY a JSON array, like ["tag1", "tag2", "tag3"]. No other text.:"""
             logger.warning("Groq client not available. Skipping LLM enrichment.")
             return None, None
         
-        summary = None
-        suggested_tags = None
-        
         try:
-            # Generate summary with retry
-            def create_summary():
+            # Generate combined response with retry
+            def create_combined():
                 return client.chat.completions.create(
                     model=settings.LLM_MODEL,
                     messages=[
-                        {"role": "system", "content": "You are a helpful assistant that summarizes web content."},
-                        {"role": "user", "content": self._build_summary_prompt(content)}
+                        {"role": "system", "content": "You are a highly intelligent content analysis engine. Return only JSON."},
+                        {"role": "user", "content": self._build_combined_prompt(content, existing_tags)}
                     ],
                     max_tokens=settings.LLM_MAX_TOKENS,
-                    temperature=settings.LLM_TEMPERATURE
+                    temperature=settings.LLM_TEMPERATURE,
+                    response_format={"type": "json_object"}
                 )
             
-            summary_response = self._call_api_with_retry(create_summary)
-            if summary_response:
-                summary = summary_response.choices[0].message.content.strip()
+            response = self._call_api_with_retry(create_combined)
+            if not response:
+                return None, None
             
-        except Exception as e:
-            logger.error(f"Error generating summary: {e}")
-        
-        try:
-            # Generate tags with retry
-            def create_tags():
-                return client.chat.completions.create(
-                    model=settings.LLM_MODEL,
-                    messages=[
-                        {"role": "system", "content": "You are a helpful assistant that suggests relevant tags."},
-                        {"role": "user", "content": self._build_tags_prompt(content)}
-                    ],
-                    max_tokens=100,
-                    temperature=settings.LLM_TEMPERATURE
-                )
+            result_text = response.choices[0].message.content.strip()
+            result = json.loads(result_text)
             
-            tags_response = self._call_api_with_retry(create_tags)
-            if not tags_response:
-                return summary, None
+            summary = result.get("summary")
+            tags = result.get("tags", [])
             
-            tags_text = tags_response.choices[0].message.content.strip()
-            
-            # Parse JSON array from response
-            # Handle potential markdown code blocks
-            if "```json" in tags_text:
-                tags_text = tags_text.split("```json")[1].split("```")[0]
-            elif "```" in tags_text:
-                tags_text = tags_text.split("```")[1].split("```")[0]
-            
-            tags = json.loads(tags_text.strip())
-            
-            if isinstance(tags, list):
-                suggested_tags = json.dumps(tags)
+            suggested_tags_json = None
+            if tags and isinstance(tags, list):
+                suggested_tags_json = json.dumps(tags)
+                
+            return summary, suggested_tags_json
             
         except json.JSONDecodeError as e:
-            logger.error(f"Error parsing tags JSON: {e}")
+            logger.error(f"Error parsing combined LLM JSON: {e}")
         except Exception as e:
-            logger.error(f"Error generating tags: {e}")
-        
-        return summary, suggested_tags
+            logger.error(f"Error in combined LLM enrichment: {e}")
+            
+        return None, None
 
 
 # Singleton instance

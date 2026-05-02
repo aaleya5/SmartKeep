@@ -16,6 +16,8 @@ from app.services.content_search_service import (
     SearchHistoryService,
     SavedSearchService,
 )
+from app.models.user import User
+from app.api.auth import get_current_user
 from typing import Optional, List
 from datetime import date, datetime
 from uuid import UUID
@@ -33,9 +35,11 @@ def search(
     date_to: Optional[date] = Query(None, description="Filter by date to (ISO)"),
     difficulty: Optional[str] = Query(None, description="Filter by difficulty"),
     collection_id: Optional[UUID] = Query(None, description="Filter by collection ID"),
+    is_read: Optional[bool] = Query(None, description="Filter by reading status"),
     limit: int = Query(20, ge=1, le=100, description="Number of results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Unified search endpoint supporting keyword, semantic, and hybrid search.
@@ -47,7 +51,8 @@ def search(
     - **date_from**: Filter items created after this date
     - **date_to**: Filter items created before this date
     - **difficulty**: Filter by difficulty (easy, intermediate, advanced)
-    - **collection_id**: Filter by collection (not implemented yet)
+    - **collection_id**: Filter by collection
+    - **is_read**: Filter by read/unread status
     - **limit**: Number of results to return (max 100)
     - **offset**: Offset for pagination
     
@@ -63,7 +68,7 @@ def search(
     date_to_dt = datetime.combine(date_to, datetime.max.time()) if date_to else None
     
     # Perform search
-    search_service = ContentSearchService(db)
+    search_service = ContentSearchService(db, user_id=str(current_user.id))
     result = search_service.search(
         query=query,
         mode=mode,
@@ -74,12 +79,14 @@ def search(
         date_from=date_from_dt,
         date_to=date_to_dt,
         difficulty=difficulty,
+        is_read=is_read,
+        collection_id=collection_id,
     )
     
     # Log to search history (only for non-empty results)
     if result['items']:
         SearchHistoryService.add_history(
-            db, query, mode, result['total']
+            db, str(current_user.id), query, mode, result['total']
         )
     
     # Build filters applied dict
@@ -94,6 +101,10 @@ def search(
         filters_applied['date_to'] = str(date_to)
     if difficulty:
         filters_applied['difficulty'] = difficulty
+    if is_read is not None:
+        filters_applied['is_read'] = is_read
+    if collection_id:
+        filters_applied['collection_id'] = str(collection_id)
     
     # Convert items to response format
     items = []
@@ -143,13 +154,14 @@ def get_suggestions(
     q: str = Query(..., min_length=2, description="Partial query for autocomplete"),
     limit: int = Query(5, ge=1, le=10, description="Max suggestions to return"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get title-based autocomplete suggestions.
     
     Returns up to 5 title suggestions based on the partial query.
     """
-    search_service = ContentSearchService(db)
+    search_service = ContentSearchService(db, user_id=str(current_user.id))
     suggestions = search_service.get_suggestions(q, limit)
     return SuggestionResponse(suggestions=suggestions)
 
@@ -158,13 +170,14 @@ def get_suggestions(
 def get_search_history(
     limit: int = Query(20, ge=1, le=100, description="Number of history items to return"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get recent search history.
     
     Returns the last 20 search queries.
     """
-    history = SearchHistoryService.get_history(db, limit)
+    history = SearchHistoryService.get_history(db, str(current_user.id), limit)
     items = [
         SearchHistoryItem(
             query=h.query,
@@ -177,23 +190,23 @@ def get_search_history(
 
 
 @router.delete("/history", status_code=204)
-def clear_search_history(db: Session = Depends(get_db)):
+def clear_search_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Clear all search history.
     
     Returns 204 No Content on success.
     """
-    SearchHistoryService.clear_history(db)
+    SearchHistoryService.clear_history(db, str(current_user.id))
 
 
 @router.get("/saved", response_model=SavedSearchesResponse)
-def get_saved_searches(db: Session = Depends(get_db)):
+def get_saved_searches(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Get all saved searches.
     
     Returns list of saved searches with their filters.
     """
-    saved = SavedSearchService.get_all(db)
+    saved = SavedSearchService.get_all(db, str(current_user.id))
     items = [
         SavedSearchResponse(
             id=s.id,
@@ -212,6 +225,7 @@ def get_saved_searches(db: Session = Depends(get_db)):
 def create_saved_search(
     request: SavedSearchCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Create a new saved search.
@@ -221,6 +235,7 @@ def create_saved_search(
     """
     saved = SavedSearchService.create(
         db,
+        user_id=str(current_user.id),
         name=request.name,
         query=request.query,
         mode=request.mode,
@@ -240,12 +255,13 @@ def create_saved_search(
 def delete_saved_search(
     search_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Delete a saved search by ID.
     
     Returns 204 No Content on success, 404 if not found.
     """
-    success = SavedSearchService.delete(db, search_id)
+    success = SavedSearchService.delete(db, str(current_user.id), search_id)
     if not success:
         raise HTTPException(status_code=404, detail="Saved search not found")

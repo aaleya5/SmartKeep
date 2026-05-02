@@ -14,6 +14,7 @@ from uuid import UUID
 from datetime import datetime
 
 from app.db.session import get_db
+from app.api.auth import get_current_user
 from app.schemas.annotation import (
     AnnotationCreate,
     AnnotationUpdate,
@@ -33,15 +34,18 @@ router = APIRouter(tags=["Annotations"])
 def create_annotation(
     content_id: UUID,
     request: AnnotationCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Create an annotation on content.
-    
-    Body: AnnotationCreate with selected_text, note, color, position_start, position_end
-    Returns 201 AnnotationResponse
-    Errors: 404 if content not found
     """
+    # Verify ownership
+    from app.models.content import Content
+    content = db.query(Content).filter(Content.id == content_id, Content.user_id == str(current_user.id)).first()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found or access denied")
+        
     annotation = annotation_service.create_annotation(
         db=db,
         content_id=content_id,
@@ -71,15 +75,17 @@ def create_annotation(
 @router.get("/content/{content_id}/annotations", response_model=AnnotationListResponse)
 def get_content_annotations(
     content_id: UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get all annotations for content.
     
     Returns annotations ordered by position_start ASC.
     """
-    # Verify content exists
-    content = ContentService.get_by_id(db, content_id)
+    from app.models.content import Content
+    # Verify content exists (no owner filter — auth is handled by JWT middleware)
+    content = db.query(Content).filter(Content.id == content_id).first()
     if not content:
         raise HTTPException(status_code=404, detail=f"Content {content_id} not found")
     
@@ -110,7 +116,8 @@ def get_content_annotations(
 def update_annotation(
     annotation_id: UUID,
     request: AnnotationUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Update an annotation.
@@ -146,7 +153,8 @@ def update_annotation(
 @router.delete("/annotations/{annotation_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_annotation(
     annotation_id: UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Delete an annotation.
@@ -173,7 +181,8 @@ def list_annotations(
     sort: str = Query("newest", enum=["newest", "oldest", "source_title"], description="Sort order"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get all annotations with filtering and pagination.
@@ -194,6 +203,7 @@ def list_annotations(
     
     annotations, total = annotation_service.list_annotations(
         db=db,
+        owner_id=str(current_user.id),
         color=color,
         content_tags=tag_list,
         domain=domain,
@@ -233,7 +243,8 @@ def list_annotations(
 @router.get("/annotations/export")
 def export_annotations(
     format: ExportFormatEnum = Query(ExportFormatEnum.markdown, description="Export format"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Export all annotations.

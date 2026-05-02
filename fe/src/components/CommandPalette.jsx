@@ -1,12 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 function CommandPalette({
   isOpen,
   onClose,
-  onNavigate,
-  onQuickSave,
-  onGoToSettings,
-  onSearch,
   documents = []
 }) {
   const [query, setQuery] = useState('');
@@ -18,6 +15,7 @@ function CommandPalette({
   ]);
   const inputRef = useRef(null);
   const resultsRef = useRef(null);
+  const navigate = useNavigate();
 
   const actionShortcuts = [
     { id: 'save-url', label: 'Save URL', icon: '🔗', action: 'save' },
@@ -62,16 +60,10 @@ function CommandPalette({
     }
   }, [isOpen]);
 
-  // Reset state when closing
-  useEffect(() => {
-    if (!isOpen) {
-      // Reset state when closed - handled by conditional rendering
-    }
-  }, [isOpen]);
-
   // Handle keyboard navigation
   const handleKeyDown = (e) => {
     const items = getAllItems();
+    if (items.length === 0) return;
     
     switch (e.key) {
       case 'ArrowDown':
@@ -94,12 +86,7 @@ function CommandPalette({
         break;
       case 'Tab':
         e.preventDefault();
-        // Cycle through different sections
-        if (actionShortcuts.length > 0) {
-          setSelectedIndex(0);
-        } else if (recentSearches.length > 0) {
-          setSelectedIndex(0);
-        }
+        setSelectedIndex(prev => (prev + 1) % items.length);
         break;
     }
   };
@@ -108,18 +95,16 @@ function CommandPalette({
   const handleSelect = (item) => {
     if (item.type === 'action') {
       if (item.action === 'save') {
-        onQuickSave();
+        navigate('/app/add');
       } else if (item.action === 'collection') {
-        onNavigate('collections');
+        navigate('/app/collections');
       } else if (item.action === 'settings') {
-        onGoToSettings();
+        navigate('/app/settings');
       }
     } else if (item.type === 'recent') {
-      setQuery(item.label);
-      onSearch(item.label);
-      onNavigate('search');
+      navigate(`/app/search?q=${encodeURIComponent(item.label)}`);
     } else if (item.type === 'result') {
-      onNavigate('library', { selectedItem: item });
+      navigate(`/app/content/${item.id}`);
     }
     onClose();
   };
@@ -130,20 +115,11 @@ function CommandPalette({
     setSelectedIndex(0);
   };
 
-  // Add to recent searches
-  const addToRecentSearches = (searchQuery) => {
-    if (searchQuery.trim() && !recentSearches.includes(searchQuery)) {
-      setRecentSearches(prev => [searchQuery, ...prev.slice(0, 2)]);
-    }
-  };
-
   // Handle form submission
   const handleSubmit = (e) => {
     e.preventDefault();
     if (query.trim()) {
-      addToRecentSearches(query);
-      onSearch(query);
-      onNavigate('search');
+      navigate(`/app/search?q=${encodeURIComponent(query)}`);
       onClose();
     }
   };
@@ -311,7 +287,6 @@ function CommandPalette({
           }
         }
 
-        /* Search Input */
         .palette-search {
           display: flex;
           align-items: center;
@@ -347,7 +322,6 @@ function CommandPalette({
           border: 1px solid var(--sidebar-border, #e5e7eb);
         }
 
-        /* Results */
         .palette-results {
           flex: 1;
           overflow-y: auto;
@@ -425,7 +399,6 @@ function CommandPalette({
           flex-shrink: 0;
         }
 
-        /* No Results */
         .no-results {
           display: flex;
           flex-direction: column;
@@ -452,7 +425,6 @@ function CommandPalette({
           color: var(--text-secondary, #9ca3af);
         }
 
-        /* Footer */
         .palette-footer {
           display: flex;
           justify-content: center;
@@ -476,44 +448,6 @@ function CommandPalette({
           padding: 2px 5px;
           border-radius: 3px;
           border: 1px solid var(--sidebar-border, #e5e7eb);
-        }
-
-        /* Dark Mode */
-        .command-palette.dark-mode {
-          --palette-bg: #1f2937;
-          --sidebar-border: #374151;
-          --hover-bg: #374151;
-          --active-bg: #4f46e5;
-          --text-primary: #f9fafb;
-          --text-secondary: #9ca3af;
-        }
-
-        .command-palette.dark-mode .palette-input {
-          color: #f3f4f6;
-        }
-
-        .command-palette.dark-mode .item-label,
-        .command-palette.dark-mode .item-title {
-          color: #f3f4f6;
-        }
-
-        .command-palette.dark-mode .no-results-text {
-          color: #d1d5db;
-        }
-
-        .command-palette.dark-mode .result-item.selected {
-          background: #4f46e5;
-        }
-
-        .command-palette.dark-mode .result-item.selected .item-label,
-        .command-palette.dark-mode .result-item.selected .item-title,
-        .command-palette.dark-mode .result-item.selected .item-summary {
-          color: #ffffff;
-        }
-
-        .command-palette.dark-mode .result-item.selected .item-shortcut {
-          background: #4338ca;
-          color: #a5b4fc;
         }
       `}</style>
     </div>

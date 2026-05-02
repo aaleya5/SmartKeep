@@ -307,12 +307,12 @@ class ExploreService:
                 is_truncated, is_read, reading_progress,
                 enrichment_status, published_at, last_opened_at,
                 created_at, updated_at,
-                1 - (embedding <=> :embedding::vector) as similarity
+                1 - (embedding\:\:vector <=> :embedding\:\:vector) as similarity
             FROM content
             WHERE id != :content_id
               AND embedding IS NOT NULL
               AND array_length(embedding, 1) = :dim
-            ORDER BY embedding <=> :embedding2::vector
+            ORDER BY embedding\:\:vector <=> :embedding2\:\:vector
             LIMIT :limit
         """)
         

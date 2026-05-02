@@ -1,389 +1,437 @@
-import { useState, useMemo } from 'react';
-import { Grid, List, Filter } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { 
+  Grid, List as ListIcon, Filter, Book, ExternalLink, 
+  Trash2, Check, Download, FolderPlus, ChevronLeft, 
+  ChevronRight, MoreVertical, CheckCircle2, Clock, 
+  BarChart3, Hash
+} from 'lucide-react';
+import { contentAPI, collectionAPI } from '../services/api';
+import './Library.css';
 
 function Library({
-  documents = [],
+  documents: initialDocuments = [],
   collections = [],
-  tags = [],
+  tags: initialTags = [],
   onSelectDocument,
   onAddToCollection,
-  onRefresh
+  onDeleteDocument,
+  onRefresh,
+  isUncollectedView = false,
+  collectionId = null
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // View & Pagination state
   const [viewMode, setViewMode] = useState('grid');
-  const [filterTag, setFilterTag] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [totalItems, setTotalItems] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [docs, setDocs] = useState([]);
 
-  const allTags = useMemo(() => {
-    return [...new Set(documents.flatMap(d => d.tags || []))].filter(Boolean);
-  }, [documents]);
+  // Filter state
+  const [filters, setFilters] = useState({
+    tag: 'all',
+    domain: 'all',
+    status: 'all',
+    difficulty: 'all',
+    sort: 'newest'
+  });
 
-  const filteredDocs = useMemo(() => {
-    if (filterTag === 'all') return documents;
-    return documents.filter(d => d.tags?.includes(filterTag));
-  }, [documents, filterTag]);
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [isBulkLoading, setIsBulkLoading] = useState(false);
+
+  // Derived data for filters
+  const [availableDomains, setAvailableDomains] = useState([]);
+  const [availableTags, setAvailableTags] = useState([]);
+
+  const fetchDocs = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params = {
+        page,
+        page_size: pageSize,
+        sort: filters.sort,
+        ...(filters.tag !== 'all' && { tags: filters.tag }),
+        ...(filters.domain !== 'all' && { domain: filters.domain }),
+        ...(filters.status === 'read' && { is_read: true }),
+        ...(filters.status === 'unread' && { is_read: false }),
+        ...(filters.difficulty !== 'all' && { difficulty: filters.difficulty })
+      };
+
+      let response;
+      if (isUncollectedView) {
+        response = await collectionAPI.getUncollectedContent(params);
+      } else if (collectionId) {
+        response = await collectionAPI.getContent(collectionId, params);
+      } else {
+        response = await contentAPI.getList(params);
+      }
+
+      setDocs(response.data.items || []);
+      setTotalItems(response.data.total || 0);
+      setHasNext(response.data.has_next || false);
+      
+      // Update filter options from the fetched items
+      if (response.data.items) {
+          // Extract unique tags from the documents
+          const allTags = new Set();
+          response.data.items.forEach(doc => {
+            if (doc.tags && Array.isArray(doc.tags)) {
+              doc.tags.forEach(tag => allTags.add(tag));
+            }
+          });
+          setAvailableTags(Array.from(allTags).sort());
+          
+          // Extract unique domains
+          const domains = [...new Set(response.data.items.map(d => d.domain).filter(Boolean))];
+          setAvailableDomains(domains);
+      }
+    } catch (err) {
+      console.error('Failed to fetch library documents:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [page, pageSize, filters, isUncollectedView, collectionId]);
+
+  useEffect(() => {
+    fetchDocs();
+  }, [fetchDocs]);
+
+  // Sync with URL tag param
+  useEffect(() => {
+    const urlTag = searchParams.get('tag');
+    if (urlTag && urlTag !== filters.tag) {
+      setFilters(prev => ({ ...prev, tag: urlTag }));
+      setPage(1);
+    }
+  }, [searchParams]);
+
+  // Handlers
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setPage(1); // Reset to first page on filter change
+    setSelectedIds(new Set()); // Clear selection
+  };
+
+  const toggleSelect = (id, e) => {
+    if (e) e.stopPropagation();
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === docs.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(docs.map(d => d.id)));
+    }
+  };
+
+  // Bulk Actions
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} items?`)) return;
+    setIsBulkLoading(true);
+    try {
+      await contentAPI.bulkDelete(Array.from(selectedIds));
+      setSelectedIds(new Set());
+      fetchDocs();
+      onRefresh && onRefresh();
+    } catch (err) {
+      console.error('Bulk delete failed:', err);
+    } finally {
+      setIsBulkLoading(false);
+    }
+  };
+
+  const handleBulkMarkRead = async (isRead) => {
+    setIsBulkLoading(true);
+    try {
+      await contentAPI.bulkMarkRead(Array.from(selectedIds), isRead);
+      setSelectedIds(new Set());
+      fetchDocs();
+      onRefresh && onRefresh();
+    } catch (err) {
+      console.error('Bulk mark read failed:', err);
+    } finally {
+      setIsBulkLoading(false);
+    }
+  };
+
+  const handleBulkExport = async () => {
+    setIsBulkLoading(true);
+    try {
+      const response = await contentAPI.bulkExport(Array.from(selectedIds));
+      const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `smartkeep_export_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Bulk export failed:', err);
+    } finally {
+      setIsBulkLoading(false);
+    }
+  };
 
   return (
-    <div className="library-sleek">
-      <div className="library-header">
-        <div className="header-titles">
-          <h2>Your Knowledge Base</h2>
-          <p className="subtitle">Explore and manage your indexed documents.</p>
-        </div>
-        <div className="library-stats">
-          <span className="count-badge">{filteredDocs.length} Documents</span>
-        </div>
-      </div>
-
-      <div className="library-controls glass-panel">
-        <div className="view-toggles">
-          <button 
-            className={`icon-btn ${viewMode === 'grid' ? 'active' : ''}`} 
-            onClick={() => setViewMode('grid')}
-            title="Grid View"
-          >
-            <Grid size={18} />
-          </button>
-          <button 
-            className={`icon-btn ${viewMode === 'list' ? 'active' : ''}`} 
-            onClick={() => setViewMode('list')}
-            title="List View"
-          >
-            <List size={18} />
-          </button>
-        </div>
-        
-        <div className="filter-group">
-          <Filter size={16} className="filter-icon" />
+    <div className="library-container">
+      {/* Sidebar Filters */}
+      <aside className="filter-sidebar">
+        <div className="filter-section">
+          <h3>Sort By</h3>
           <select 
-            className="sleek-select"
-            value={filterTag}
-            onChange={(e) => setFilterTag(e.target.value)}
+            className="sleek-select" 
+            value={filters.sort}
+            onChange={(e) => handleFilterChange('sort', e.target.value)}
           >
-            <option value="all">All Tags</option>
-            {allTags.map(tag => (
-              <option key={tag} value={tag}>#{tag}</option>
-            ))}
+            <option value="newest">Recently Saved</option>
+            <option value="oldest">Oldest Saved</option>
+            <option value="date_read">Recently Read</option>
+            <option value="alpha_asc">Title (A-Z)</option>
+            <option value="reading_time_asc">Shortest Read</option>
+            <option value="reading_time_desc">Longest Read</option>
           </select>
         </div>
-      </div>
 
-      {filteredDocs.length === 0 ? (
-        <div className="empty-state sleek-panel">
-          <div className="empty-icon"><Book size={48} /></div>
-          <h3>No Documents Found</h3>
-          <p>Try adjusting your search filters or add new content.</p>
+        <div className="filter-section">
+          <h3>Status</h3>
+          <div className="tag-cloud-filter">
+            <button 
+              className={`tag-filter-chip ${filters.status === 'all' ? 'active' : ''}`}
+              onClick={() => handleFilterChange('status', 'all')}
+            >All</button>
+            <button 
+              className={`tag-filter-chip ${filters.status === 'unread' ? 'active' : ''}`}
+              onClick={() => handleFilterChange('status', 'unread')}
+            >Unread</button>
+            <button 
+              className={`tag-filter-chip ${filters.status === 'read' ? 'active' : ''}`}
+              onClick={() => handleFilterChange('status', 'read')}
+            >Read</button>
+          </div>
         </div>
-      ) : (
-        <div className={`library-grid ${viewMode}`}>
-          {filteredDocs.map(doc => (
-            <div 
-              key={doc.id} 
-              className="sleek-doc-card"
-              onClick={() => onSelectDocument && onSelectDocument(doc)}
+
+        <div className="filter-section">
+          <h3>Tags</h3>
+          <div className="tag-cloud-filter">
+            <button 
+                className={`tag-filter-chip ${filters.tag === 'all' ? 'active' : ''}`}
+                onClick={() => handleFilterChange('tag', 'all')}
+            >All Tags</button>
+            {availableTags.slice(0, 15).map(tag => (
+              <button 
+                key={tag}
+                className={`tag-filter-chip ${filters.tag === tag ? 'active' : ''}`}
+                onClick={() => handleFilterChange('tag', tag)}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="filter-section">
+          <h3>Difficulty</h3>
+          <select 
+            className="sleek-select"
+            value={filters.difficulty}
+            onChange={(e) => handleFilterChange('difficulty', e.target.value)}
+          >
+            <option value="all">Any Difficulty</option>
+            <option value="easy">Easy</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+          </select>
+        </div>
+
+        <div className="filter-section">
+            <h3>Domain</h3>
+            <select 
+                className="sleek-select"
+                value={filters.domain}
+                onChange={(e) => handleFilterChange('domain', e.target.value)}
             >
-              <div className="doc-topbar">
-                <span className="doc-domain">{doc.domain}</span>
-                {doc.difficulty_score && (
-                  <span className="doc-score">
-                    Complexity: {doc.difficulty_score}/100
-                  </span>
+                <option value="all">All Domains</option>
+                {availableDomains.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                ))}
+            </select>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="library-main" style={{ flex: 1 }}>
+        <header className="library-header" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>
+                {isUncollectedView ? 'Inbox' : collectionId ? 'Collection' : 'Your Library'}
+            </h2>
+            <p style={{ color: 'var(--text-secondary)' }}>{totalItems} items found in your knowledge base</p>
+          </div>
+          <div className="view-toggles">
+            <button 
+                className={`icon-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                onClick={() => setViewMode('grid')}
+            ><Grid size={18} /></button>
+            <button 
+                className={`icon-btn ${viewMode === 'list' ? 'active' : ''}`}
+                onClick={() => setViewMode('list')}
+            ><ListIcon size={18} /></button>
+          </div>
+        </header>
+
+        {isLoading ? (
+          <div className="loading-state" style={{ padding: '4rem', textAlign: 'center' }}>
+            <div className="spinner"></div>
+            <p style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>Loading documents...</p>
+          </div>
+        ) : docs.length === 0 ? (
+          <div className="empty-state sleek-panel">
+            <div className="empty-icon"><Book size={48} /></div>
+            <h3>No items found</h3>
+            <p>Try clearing your filters or adding new content.</p>
+            {(filters.tag !== 'all' || filters.status !== 'all' || filters.domain !== 'all') && (
+                <button 
+                    className="btn btn-secondary" 
+                    style={{ marginTop: '1rem' }}
+                    onClick={() => {
+                        setFilters({ tag: 'all', domain: 'all', status: 'all', difficulty: 'all', sort: 'newest' });
+                        setSearchParams({});
+                        setPage(1);
+                        setSelectedIds(new Set());
+                    }}
+                >Clear Filters</button>
+            )}
+          </div>
+        ) : (
+          <div className={`library-grid ${viewMode}`}>
+            {docs.map(doc => (
+              <div 
+                key={doc.id} 
+                className={`sleek-doc-card ${selectedIds.has(doc.id) ? 'selected' : ''}`}
+                onClick={() => onSelectDocument && onSelectDocument(doc)}
+              >
+                <div 
+                  className="selection-checkbox" 
+                  onClick={(e) => toggleSelect(doc.id, e)}
+                >
+                  <Check size={12} strokeWidth={3} />
+                </div>
+
+                <div className="doc-topbar">
+                  <span className="doc-domain">{doc.domain}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {doc.is_read && <CheckCircle2 size={14} className="status-icon read" style={{ color: '#10b981' }} />}
+                    <span className="doc-date">{new Date(doc.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+
+                <h3 className="doc-title">{doc.title}</h3>
+                
+                {viewMode === 'grid' && (
+                  <p className="doc-preview">
+                    {doc.summary || 'Indexing and analyzing content...'}
+                  </p>
                 )}
+
+                 <div className="doc-bottombar">
+                   <div className="tag-list">
+                     {doc.tags?.slice(0, 2).map((tag, idx) => (
+                       <span 
+                         key={idx} 
+                         className="mono-tag amber clickable" 
+                         onClick={(e) => {
+                             e.stopPropagation();
+                             handleFilterChange('tag', tag);
+                         }}
+                       >#{tag}</span>
+                     ))}
+                     {doc.tags?.length > 2 && <span className="mono-tag gray">+{doc.tags.length - 2}</span>}
+                   </div>
+                   <div className="doc-meta-icons" style={{ display: 'flex', gap: '12px', color: 'var(--text-secondary)' }}>
+                     {doc.reading_time_minutes > 0 && (
+                         <div title="Reading time" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
+                             <Clock size={12} /> {doc.reading_time_minutes}m
+                         </div>
+                     )}
+                     {doc.difficulty && (
+                         <div title="Complexity" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
+                             <BarChart3 size={12} /> {doc.difficulty}
+                         </div>
+                     )}
+                   </div>
+                   <div className="doc-actions" style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-color)' }}>
+                     <button 
+                       className="add-to-collection-btn"
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         onAddToCollection && onAddToCollection(doc.id);
+                       }}
+                     >
+                       <FolderPlus size={14} />
+                       <span>Add to collection</span>
+                     </button>
+                   </div>
+                 </div>
               </div>
-              
-              <h3 className="doc-title">{doc.title}</h3>
-              {viewMode === 'grid' && (
-                <p className="doc-preview">{doc.summary || "Content extracted and indexed. Semantic analysis active."}</p>
-              )}
-              
-              <div className="doc-bottombar">
-                <div className="tag-list">
-                  {doc.tags?.slice(0, 3).map((tag, idx) => (
-                    <span key={idx} className="mono-tag amber">#{tag}</span>
-                  ))}
-                </div>
-                <div className="doc-actions">
-                  <button 
-                    className="action-btn" 
-                    onClick={(e) => { e.stopPropagation(); onAddToCollection && onAddToCollection(doc.id); }}
-                    title="Add to Collection"
-                  >
-                    + Add
-                  </button>
-                </div>
-              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {!isLoading && totalItems > pageSize && (
+            <div className="pagination-container">
+                <button 
+                    className="page-btn" 
+                    disabled={page === 1}
+                    onClick={() => setPage(p => p - 1)}
+                ><ChevronLeft size={20} /></button>
+                <span className="page-info">Page {page} of {Math.ceil(totalItems / pageSize)}</span>
+                <button 
+                    className="page-btn"
+                    disabled={!hasNext}
+                    onClick={() => setPage(p => p + 1)}
+                ><ChevronRight size={20} /></button>
             </div>
-          ))}
+        )}
+      </main>
+
+      {/* Bulk Action Toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="bulk-toolbar">
+          <div className="bulk-info">
+            {selectedIds.size} items selected
+          </div>
+          <div className="bulk-actions">
+            <button className="bulk-btn" onClick={() => handleBulkMarkRead(true)}>
+              <CheckCircle2 size={16} /> Mark Read
+            </button>
+            <button className="bulk-btn" onClick={() => handleBulkMarkRead(false)}>
+              Mark Unread
+            </button>
+            <button className="bulk-btn" onClick={handleBulkExport}>
+              <Download size={16} /> Export
+            </button>
+            <button className="bulk-btn danger" onClick={handleBulkDelete}>
+              <Trash2 size={16} /> Delete
+            </button>
+            <button className="bulk-btn" onClick={() => setSelectedIds(new Set())}>
+              Cancel
+            </button>
+          </div>
         </div>
       )}
-
-      <style>{`
-        .library-sleek {
-          display: flex;
-          flex-direction: column;
-          gap: 32px;
-        }
-
-        .library-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          padding-bottom: 24px;
-          border-bottom: 1px solid var(--border-color);
-        }
-
-        .header-titles h2 {
-          margin-bottom: 8px;
-          font-size: 2.5rem;
-        }
-
-        .header-titles .subtitle {
-          margin-bottom: 0;
-          color: var(--text-secondary);
-        }
-
-        .count-badge {
-          font-family: var(--font-mono);
-          font-weight: 500;
-          font-size: 13px;
-          background: rgba(245, 200, 66, 0.1);
-          color: var(--accent-color);
-          padding: 6px 16px;
-          border-radius: 99px;
-          border: 1px solid rgba(245, 200, 66, 0.2);
-        }
-
-        .library-controls {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 16px 24px;
-        }
-
-        .view-toggles { 
-          display: flex; 
-          gap: 8px; 
-          background: rgba(255, 255, 255, 0.05);
-          padding: 4px;
-          border-radius: 8px;
-        }
-
-        .icon-btn {
-          background: transparent;
-          border: none;
-          color: var(--text-secondary);
-          padding: 8px;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .icon-btn:hover { 
-          color: var(--text-color); 
-          background: rgba(255, 255, 255, 0.05);
-        }
-
-        .icon-btn.active {
-          background: var(--bg-secondary);
-          color: var(--text-color);
-          box-shadow: var(--shadow-sm);
-        }
-
-        .filter-group {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        
-        .filter-icon {
-          color: var(--text-secondary);
-        }
-
-        .sleek-select {
-          background: var(--bg-tertiary);
-          border: 1px solid var(--border-color);
-          color: var(--text-color);
-          padding: 8px 16px;
-          border-radius: 8px;
-          font-family: var(--font-sans);
-          font-weight: 500;
-          font-size: 14px;
-          cursor: pointer;
-          outline: none;
-          min-width: 150px;
-          transition: all 0.2s;
-        }
-
-        .sleek-select:focus { 
-          border-color: var(--accent-color);
-          box-shadow: 0 0 0 2px rgba(245, 200, 66, 0.1); 
-        }
-        
-        .empty-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 80px 24px;
-          text-align: center;
-        }
-        
-        .empty-icon {
-          color: var(--text-secondary);
-          opacity: 0.5;
-          margin-bottom: 24px;
-        }
-
-        .library-grid.grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-          gap: 24px;
-        }
-
-        .library-grid.list {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .sleek-doc-card {
-          background: var(--bg-secondary);
-          border: 1px solid var(--border-color);
-          border-radius: var(--border-radius-lg);
-          padding: 24px;
-          transition: all 0.2s ease;
-          cursor: pointer;
-          display: flex;
-          flex-direction: column;
-          position: relative;
-          overflow: hidden;
-        }
-        
-        .sleek-doc-card::before {
-          content: '';
-          position: absolute;
-          top: 0; left: 0; right: 0;
-          height: 100%;
-          background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%);
-          opacity: 0;
-          transition: opacity 0.2s ease;
-          pointer-events: none;
-        }
-
-        .sleek-doc-card:hover {
-          transform: translateY(-4px);
-          box-shadow: var(--shadow-md);
-          border-color: rgba(255, 255, 255, 0.1);
-        }
-        
-        .sleek-doc-card:hover::before {
-          opacity: 1;
-        }
-
-        .library-grid.list .sleek-doc-card {
-          flex-direction: row;
-          align-items: center;
-          padding: 16px 24px;
-          gap: 24px;
-        }
-
-        .doc-topbar {
-          display: flex; 
-          justify-content: space-between; 
-          align-items: center;
-          margin-bottom: 16px; 
-        }
-
-        .library-grid.list .doc-topbar {
-          margin-bottom: 0;
-          min-width: 150px;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 8px;
-        }
-
-        .doc-domain {
-          font-family: var(--font-mono);
-          font-size: 11px;
-          color: var(--text-secondary);
-          letter-spacing: 0.05em;
-        }
-
-        .doc-score { 
-          font-family: var(--font-sans);
-          font-size: 11px;
-          font-weight: 600;
-          color: var(--text-secondary); 
-          background: rgba(255, 255, 255, 0.05); 
-          padding: 4px 8px;
-          border-radius: 4px;
-        }
-
-        .doc-title { 
-          font-size: 1.2rem; 
-          line-height: 1.4; 
-          margin-bottom: 12px; 
-        }
-        
-        .library-grid.list .doc-title { 
-          flex: 1; 
-          margin-bottom: 0; 
-          font-size: 1.1rem; 
-        }
-
-        .doc-preview {
-          font-size: 14px; 
-          color: var(--text-secondary);
-          margin-bottom: 24px;
-          display: -webkit-box; 
-          -webkit-line-clamp: 3; 
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          flex-grow: 1;
-        }
-
-        .doc-bottombar {
-          display: flex; 
-          justify-content: space-between; 
-          align-items: center;
-          margin-top: auto;
-          padding-top: 16px;
-          border-top: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        
-        .library-grid.list .doc-bottombar {
-          margin-top: 0;
-          padding-top: 0;
-          border-top: none;
-          min-width: 200px;
-        }
-
-        .tag-list { 
-          display: flex; 
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-
-        .action-btn {
-          background: transparent; 
-          border: 1px solid var(--border-color);
-          color: var(--text-secondary);
-          font-family: var(--font-sans); 
-          font-size: 12px; 
-          font-weight: 600;
-          padding: 6px 12px; 
-          border-radius: 6px;
-          cursor: pointer; 
-          transition: all 0.2s;
-        }
-
-        .action-btn:hover { 
-          background: var(--text-color); 
-          color: var(--bg-color); 
-          border-color: var(--text-color);
-        }
-      `}</style>
     </div>
   );
 }

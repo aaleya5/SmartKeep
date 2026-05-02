@@ -18,7 +18,7 @@ class ColorEnum(str, Enum):
 
 class AnnotationCreate(BaseModel):
     """Schema for creating an annotation."""
-    selected_text: str
+    selected_text: Optional[str] = None
     note: Optional[str] = None
     color: str = "yellow"
     position_start: Optional[int] = None
@@ -53,7 +53,7 @@ class AnnotationResponse(BaseModel):
     
     id: UUID
     content_id: UUID
-    selected_text: str
+    selected_text: Optional[str] = None
     note: Optional[str] = None
     color: str
     position_start: Optional[int] = None
@@ -64,8 +64,8 @@ class AnnotationResponse(BaseModel):
 
 class AnnotationWithSourceResponse(AnnotationResponse):
     """Schema for annotation with parent content info (used in global annotations page)."""
-    content_title: str
-    content_domain: str
+    content_title: Optional[str] = ''
+    content_domain: Optional[str] = ''
     content_favicon_url: Optional[str] = None
     content_tags: List[str] = []
 

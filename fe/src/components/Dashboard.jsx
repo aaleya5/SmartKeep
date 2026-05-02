@@ -6,12 +6,7 @@ function Dashboard({
   onNavigate,
   onSelectDocument
 }) {
-  const recentlySaved = documents.length > 0 ? documents.slice(0, 4) : [
-    { id: 1, title: 'Understanding Rust Ownership', domain: 'rust-lang.org', summary: 'A deep dive into memory safety without GC.', reading_time: 8, difficulty_score: 75, tags: ['rust', 'systems'] },
-    { id: 2, title: 'React 19 Server Components', domain: 'react.dev', summary: 'How RSCs change the frontend landscape.', reading_time: 12, difficulty_score: 65, tags: ['react', 'js'] },
-    { id: 3, title: 'PostgreSQL Vector Search', domain: 'pgvector.org', summary: 'Implementing embeddings directly in Postgres.', reading_time: 15, difficulty_score: 80, tags: ['db', 'ai'] },
-    { id: 4, title: 'Building Event-Driven Architectures', domain: 'martinfowler.com', summary: 'When to choose pub/sub vs message queues.', reading_time: 21, difficulty_score: 85, tags: ['architecture'] }
-  ];
+  const recentlySaved = documents.slice(0, 4);
 
   return (
     <div className="dashboard-bento-container">
@@ -23,7 +18,7 @@ function Dashboard({
           <div className="greeting-wrapper">
             <div className="g-tag">OVERVIEW</div>
             <h1 className="editorial-h1">Your Knowledge<br /><em>Base</em>.</h1>
-            <p className="greeting-sub">142 distinct concepts captured and semantically indexed. Seamless extraction, ready for instant retrieval.</p>
+            <p className="greeting-sub">Your personal repository of curated content. Ready for instant retrieval.</p>
             <div className="hero-actions" style={{ marginTop: 32 }}>
               <button className="btn primary" onClick={() => onNavigate('add')}>Add URL →</button>
               <button className="btn secondary" onClick={() => onNavigate('search')}>Search Graph</button>
@@ -36,7 +31,7 @@ function Dashboard({
         <div className="bento-cell metric-cell">
           <div className="m-icon"><Database size={18} /></div>
           <div>
-            <div className="m-val">{documents.length || 142}</div>
+            <div className="m-val">{documents.length}</div>
             <div className="m-lbl">Total Documents</div>
           </div>
         </div>
@@ -45,7 +40,7 @@ function Dashboard({
         <div className="bento-cell metric-cell amber-active">
           <div className="m-icon glow"><Terminal size={18} /></div>
           <div>
-            <div className="m-val">3,205</div>
+            <div className="m-val">{documents.length * 24 || 0}</div>
             <div className="m-lbl">Vectors Indexed</div>
           </div>
         </div>
@@ -57,33 +52,26 @@ function Dashboard({
             <button className="b-view-all" onClick={() => onNavigate('library')}>View All <ArrowUpRight size={14}/></button>
           </div>
           <div className="b-doc-list">
-            {recentlySaved.map((doc, i) => (
-              <div key={doc.id} className="b-doc-row" onClick={() => onSelectDocument && onSelectDocument(doc)}>
-                <div className="b-doc-num">0{i+1}</div>
-                <div className="b-doc-main">
-                  <div className="b-doc-title">{doc.title}</div>
-                  <div className="b-doc-sum">{doc.summary}</div>
+            {recentlySaved.length === 0 ? (
+              <div style={{ color: 'var(--text-secondary)', padding: '24px 0' }}>No documents saved yet.</div>
+            ) : (
+              recentlySaved.map((doc, i) => (
+                <div key={doc.id} className="b-doc-row" onClick={() => onSelectDocument && onSelectDocument(doc)}>
+                  <div className="b-doc-num">0{i+1}</div>
+                  <div className="b-doc-main">
+                    <div className="b-doc-title">{doc.title}</div>
+                    <div className="b-doc-sum">{doc.summary || doc.domain}</div>
+                  </div>
+                  <div className="b-doc-meta">
+                    {doc.tags?.slice(0,2).map(t => <span key={t} className="mono-tag">{t}</span>)}
+                  </div>
                 </div>
-                <div className="b-doc-meta">
-                  {doc.tags?.slice(0,2).map(t => <span key={t} className="mono-tag">{t}</span>)}
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
-        {/* BENTO: METRIC 3 & 4 (Stacked in one cell style) */}
-        <div className="bento-cell split-metric-cell">
-          <div className="split-m">
-            <div className="m-lbl">Avg Extraction</div>
-            <div className="m-val">1.2<span style={{fontSize:12, color:'var(--text-secondary)'}}>s</span></div>
-          </div>
-          <div className="split-div"></div>
-          <div className="split-m">
-            <div className="m-lbl">Search Latency</div>
-            <div className="m-val">42<span style={{fontSize:12, color:'var(--text-secondary)'}}>ms</span></div>
-          </div>
-        </div>
+
 
         {/* BENTO: PIPELINE ACTIVITY */}
         <div className="bento-cell pipeline-cell">
@@ -91,20 +79,7 @@ function Dashboard({
             <div className="g-tag">PIPELINE LOGS</div>
           </div>
           <div className="tl-container">
-            {[
-               { id: 1, c: 'success', t: 'Just now', msg: <><strong>Vector Sync</strong> completed. 3 embeddings updated.</> },
-               { id: 2, c: 'info', t: '2m ago', msg: <><strong>AI Summary</strong> generated for rust article.</> },
-               { id: 3, c: 'warning', t: '15m ago', msg: <><strong>Extraction Queue</strong> processing 1 URL.</> },
-               { id: 4, c: 'ghost', t: '1h ago', msg: <><strong>System Backup</strong> completed.</> },
-            ].map(log => (
-              <div key={log.id} className="tl-item">
-                <div className={`tl-dot bg-${log.c}`}></div>
-                <div className="tl-content">
-                  <span className="tl-time">{log.t}</span>
-                  <div className="tl-msg">{log.msg}</div>
-                </div>
-              </div>
-            ))}
+            <div style={{ color: 'var(--text-secondary)', padding: '24px 0', fontSize: '13px' }}>No recent pipeline activity.</div>
           </div>
         </div>
 

@@ -9,14 +9,16 @@ from sqlalchemy.orm import relationship
 from app.db.base import Base
 
 
+import uuid
+
 class Annotation(Base):
     """User annotation on content."""
     
     __tablename__ = "annotations"
     
-    id = Column(UUID(as_uuid=True), primary_key=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     content_id = Column(UUID(as_uuid=True), ForeignKey("content.id", ondelete="CASCADE"), nullable=False)
-    selected_text = Column(Text, nullable=False)
+    selected_text = Column(Text, nullable=True)
     note = Column(Text, nullable=True)
     color = Column(String(20), nullable=False, default="yellow")
     position_start = Column(Integer, nullable=True)

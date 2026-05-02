@@ -412,29 +412,46 @@
   color: var(--accent-color);
 }
 
-.new-icon {
-  font-size: 2rem;
-  font-weight: 300;
-  width: 48px;
-  height: 48px;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.new-icon-circle {
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(245, 200, 66, 0.05);
+  border: 1px solid rgba(245, 200, 66, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  margin-bottom: 0.5rem;
+}
+
+.new-collection-card:hover .new-icon-circle {
+  background: var(--accent-color);
+  transform: scale(1.15) rotate(90deg);
+  border-color: var(--accent-color);
+}
+
+.new-icon {
+  font-size: 2rem;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.3s;
 }
 
 .new-collection-card:hover .new-icon {
-  background: rgba(245, 200, 66, 0.1);
-  transform: scale(1.1);
+  color: #111;
 }
 
-.new-label {
+.new-hint {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.2);
+  margin: 0;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 /* Tooltip */

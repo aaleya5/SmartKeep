@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { authAPI } from "../services/api";
+import { useGoogleLogin } from '@react-oauth/google';
 import './Landing.css';
 
 /* ─── FLIM.AI STYLE FLOATING UI SHARDS ──────────────────────────
@@ -13,12 +15,41 @@ const SEARCH_RESULTS = [
   { title: "Why JVM Garbage Collection Feels Slow", snip: <><mark>Memory management</mark> in GC vs ownership-based languages compared.</>, score: "0.81", c: "#60b4f0" },
 ];
 
-export default function Landing() {
+export default function Landing({ forceLogin = false }) {
   const curRef = useRef(null);
   const ringRef = useRef(null);
   const [url, setUrl] = useState("");
   const [saved, setSaved] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(forceLogin);
+  const [authMode, setAuthMode] = useState(forceLogin ? 'login' : 'register'); // 'login', 'register', or 'forgot-password'
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [passwordWarning, setPasswordWarning] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const navigate = useNavigate();
+
+  // Check password length as user types and prevent exceeding 72 bytes
+  const handlePasswordChange = (e) => {
+    let newPassword = e.target.value;
+    const passwordBytes = new TextEncoder().encode(newPassword).length;
+    
+    // If password exceeds 72 bytes, truncate it
+    if (passwordBytes > 72) {
+      // Truncate character by character until we're under 72 bytes
+      while (new TextEncoder().encode(newPassword).length > 72 && newPassword.length > 0) {
+        newPassword = newPassword.slice(0, -1);
+      }
+      setPasswordWarning('Password truncated to 72 bytes maximum');
+    } else if (passwordBytes > 60) {
+      setPasswordWarning(`Password length: ${passwordBytes} bytes (max 72)`);
+    } else {
+      setPasswordWarning('');
+    }
+    
+    setPassword(newPassword);
+  };
 
   useEffect(() => {
     const mv = e => {
@@ -28,6 +59,130 @@ export default function Landing() {
     window.addEventListener("mousemove", mv);
     return () => window.removeEventListener("mousemove", mv);
   }, []);
+
+  // Check for GitHub OAuth callback code
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    
+    if (code) {
+      setLoading(true);
+      setError('');
+      setShowAuthModal(true);
+      
+      // Clean up URL right away
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      authAPI.socialLogin(code, 'github')
+        .then(response => {
+          localStorage.setItem('smartkeep_auth_token', response.data.access_token);
+          window.location.href = '/app';
+        })
+        .catch(err => {
+          setError(err.response?.data?.detail || 'Failed to authenticate with GitHub');
+          setLoading(false);
+        });
+    }
+  }, []);
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    if (authMode === 'forgot-password') {
+      try {
+        await authAPI.forgotPassword(email);
+        setSuccessMessage('If an account exists, a reset link has been sent to your email.');
+        setLoading(false);
+        return;
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Failed to send reset link');
+        setLoading(false);
+        return;
+      }
+    }
+
+    try {
+      let token;
+      if (authMode === 'login') {
+        const response = await authAPI.login(email, password);
+        token = response.data.access_token;
+      } else {
+        // Register the user
+        await authAPI.register(email, password);
+        // Inform user to check email
+        setSuccessMessage('Registration successful! Please check your email to verify your account.');
+        setAuthMode('login');
+        setLoading(false);
+        return;
+      }
+      
+      // Save token to localStorage
+      localStorage.setItem('smartkeep_auth_token', token);
+      setShowAuthModal(false);
+      setEmail('');
+      setPassword('');
+      setPasswordWarning('');
+      // Use window.location to force App.jsx to remount and check auth state
+      window.location.href = '/app';
+    } catch (err) {
+      let errorMsg = 'Authentication failed';
+      const detail = err.response?.data?.detail;
+      
+      if (err.response?.status === 403 && detail?.includes('verified')) {
+        errorMsg = 'Email not verified. Please check your inbox for the verification link.';
+      } else if (err.userMessage) {
+        errorMsg = err.userMessage;
+      } else if (detail) {
+        if (typeof detail === 'string') {
+          errorMsg = detail;
+        } else if (Array.isArray(detail) && detail.length > 0 && detail[0].msg) {
+          errorMsg = detail[0].msg;
+        } else if (typeof detail === 'object' && detail.message) {
+          errorMsg = detail.message;
+        } else {
+          errorMsg = JSON.stringify(detail);
+        }
+      } else if (err.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithGoogle = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setLoading(true);
+      setError('');
+      try {
+        // Send the access token to backend
+        const response = await authAPI.socialLogin(tokenResponse.access_token, 'google');
+        localStorage.setItem('smartkeep_auth_token', response.data.access_token);
+        window.location.href = '/app';
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Failed to authenticate with Google');
+        setLoading(false);
+      }
+    },
+    onError: () => {
+      setError('Google login failed or was cancelled');
+    }
+  });
+
+  const handleGitHubLogin = () => {
+    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
+    if (!clientId) {
+      setError('GitHub client ID is not configured');
+      return;
+    }
+    const redirectUri = window.location.origin; // Will redirect back to Landing page
+    window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=user:email`;
+  };
 
   const doSave = () => {
     if (!url.trim()) {
@@ -56,8 +211,114 @@ export default function Landing() {
           <li><a href="#how">how_it_works</a></li>
           <li><a href="https://github.com" style={{ color: "var(--amber)" }}>github ↗</a></li>
         </ul>
-        <button onClick={() => navigate('/app')} className="nav-cta border-none cursor-pointer">Open App →</button>
+        <button onClick={() => setShowAuthModal(true)} className="nav-cta border-none cursor-pointer">Open App →</button>
       </nav>
+
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <div className="auth-modal-overlay" onClick={() => setShowAuthModal(false)}>
+          <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="close-btn" onClick={() => setShowAuthModal(false)}>×</button>
+            <h2>
+              {authMode === 'login' ? 'Welcome Back' : 
+               authMode === 'register' ? 'Create Account' : 
+               'Reset Password'}
+            </h2>
+            
+            {successMessage ? (
+              <div className="auth-success-state">
+                <div className="success-icon">✓</div>
+                <p>{successMessage}</p>
+                <button onClick={() => setSuccessMessage('')} className="btn primary w-full mt-4">
+                  Back to Login
+                </button>
+              </div>
+            ) : (
+              <>
+                <form onSubmit={handleAuth}>
+                  <div className="form-group">
+                    <label htmlFor="email">Email</label>
+                    <input
+                      type="email"
+                      id="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="your@email.com"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  
+                  {authMode !== 'forgot-password' && (
+                    <div className="form-group">
+                      <div className="label-row">
+                        <label htmlFor="password">Password</label>
+                        {authMode === 'login' && (
+                          <button 
+                            type="button" 
+                            className="link-btn small-link"
+                            onClick={() => { setAuthMode('forgot-password'); setError(''); }}
+                          >
+                            Forgot?
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="password"
+                        id="password"
+                        value={password}
+                        onChange={handlePasswordChange}
+                        placeholder="••••••••"
+                        required
+                        disabled={loading}
+                      />
+                      {passwordWarning && <div className="password-warning">{passwordWarning}</div>}
+                    </div>
+                  )}
+                  
+                  {error && <div className="auth-error">{error}</div>}
+                  
+                  <button type="submit" disabled={loading} className="btn primary" style={{ width: '100%' }}>
+                    {loading ? 'Processing...' : (
+                      authMode === 'login' ? 'Sign In' : 
+                      authMode === 'register' ? 'Join SmartKeep' : 
+                      'Send Reset Link'
+                    )}
+                  </button>
+                </form>
+                
+                {authMode !== 'forgot-password' && (
+                  <div className="social-auth-section">
+                    <div className="divider"><span>or continue with</span></div>
+                    <div className="social-btns">
+                      <button type="button" onClick={() => loginWithGoogle()} className="social-btn google" disabled={loading}>
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google" />
+                        Google
+                      </button>
+                      <button type="button" onClick={handleGitHubLogin} className="social-btn github" disabled={loading}>
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Octicons-mark-github.svg" alt="GitHub" />
+                        GitHub
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="auth-toggle">
+                  {authMode === 'login' ? (
+                    <>
+                      New to SmartKeep? <button onClick={() => { setAuthMode('register'); setError(''); }} className="link-btn">Create an account</button>
+                    </>
+                  ) : (
+                    <>
+                      Already have an account? <button onClick={() => { setAuthMode('login'); setError(''); }} className="link-btn">Sign in</button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── HERO WITH FLOATING UI SHARDS (FLIM.AI STYLE) ── */}
       <section className="strips-hero">
@@ -133,7 +394,7 @@ export default function Landing() {
             by <strong>meaning</strong> — not just keywords.
           </p>
           <div className="hero-btns">
-            <button onClick={() => navigate('/app')} className="btn-a cursor-pointer border-none">Enter App →</button>
+            <button onClick={() => setShowAuthModal(true)} className="btn-a cursor-pointer border-none">Enter App →</button>
             <a href="#reader" className="btn-b"><span>↓</span> See it in action</a>
           </div>
         </div>

@@ -12,7 +12,7 @@ export function useKeyboardShortcuts(shortcuts, options = {}) {
   const { enabled = true, ignoreInputKeys = ['s', 'f'] } = options;
 
   const handleKeyDown = useCallback((event) => {
-    if (!enabled) return;
+    if (!enabled || !event.key) return;
 
     // Don't trigger shortcuts when typing in input fields (except for specific keys)
     const isInputElement = ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) ||

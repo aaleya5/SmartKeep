@@ -26,6 +26,7 @@ class CollectionService:
     @staticmethod
     def create_collection(
         db: Session,
+        owner_id: str,
         name: str,
         description: Optional[str] = None,
         color: str = "#1A3A5C",
@@ -52,6 +53,7 @@ class CollectionService:
             description=description,
             color=color,
             icon=icon,
+            user_id=owner_id,
         )
         
         # Only set these if the columns exist
@@ -67,24 +69,30 @@ class CollectionService:
         return collection
     
     @staticmethod
-    def get_collection(db: Session, collection_id: UUID) -> Optional[Collection]:
-        """Get a collection by ID."""
-        return db.query(Collection).filter(Collection.id == collection_id).first()
+    def get_collection(db: Session, collection_id: UUID, owner_id: str) -> Optional[Collection]:
+        """Get a collection by ID and owner."""
+        return db.query(Collection).filter(Collection.id == collection_id, Collection.user_id == owner_id).first()
     
     @staticmethod
-    def get_collection_content_count(db: Session, collection_id: UUID) -> int:
+    def get_collection_content_count(db: Session, collection_id: UUID, owner_id: Optional[str] = None) -> int:
         """Get the content count for a collection."""
-        count = db.query(func.count(ContentCollection.content_id)).filter(
+        query = db.query(func.count(ContentCollection.content_id)).filter(
             ContentCollection.collection_id == collection_id
-        ).scalar()
+        )
+        if owner_id:
+            query = query.join(Collection, ContentCollection.collection_id == Collection.id).filter(Collection.user_id == owner_id)
+        count = query.scalar()
         return count or 0
     
     @staticmethod
-    def get_collection_preview_images(db: Session, collection_id: UUID, limit: int = 3) -> List[str]:
+    def get_collection_preview_images(db: Session, collection_id: UUID, limit: int = 3, owner_id: Optional[str] = None) -> List[str]:
         """Get preview images (og_image_url) for a collection."""
-        content_ids = db.query(ContentCollection.content_id).filter(
+        collection_query = db.query(ContentCollection.content_id).filter(
             ContentCollection.collection_id == collection_id
-        ).order_by(ContentCollection.added_at.desc()).limit(limit).all()
+        )
+        if owner_id:
+            collection_query = collection_query.join(Collection, ContentCollection.collection_id == Collection.id).filter(Collection.user_id == owner_id)
+        content_ids = collection_query.order_by(ContentCollection.added_at.desc()).limit(limit).all()
         
         if not content_ids:
             return []
@@ -98,6 +106,7 @@ class CollectionService:
     @staticmethod
     def list_collections(
         db: Session,
+        owner_id: str,
         include_empty: bool = True,
         sort: str = "newest"
     ) -> List[Dict[str, Any]]:
@@ -112,34 +121,33 @@ class CollectionService:
         except Exception:
             has_pinned_column = False
         
+        base_query = db.query(Collection).filter(Collection.user_id == owner_id)
+
         if has_pinned_column:
             if sort == "name":
-                collections = db.query(Collection).order_by(Collection.name.asc()).all()
+                collections = base_query.order_by(Collection.name.asc()).all()
             elif sort == "newest":
-                collections = db.query(Collection).order_by(Collection.created_at.desc()).all()
+                collections = base_query.order_by(Collection.created_at.desc()).all()
             elif sort == "item_count":
-                collections = db.query(Collection).order_by(Collection.created_at.desc()).all()
+                collections = base_query.order_by(Collection.created_at.desc()).all()
             elif sort == "manual":
-                collections = db.query(Collection).order_by(
-                    Collection.is_pinned.desc(), Collection.sort_order.asc()
-                ).all()
+                collections = base_query.order_by(Collection.is_pinned.desc(), Collection.sort_order.asc()).all()
             else:
-                collections = db.query(Collection).order_by(Collection.created_at.desc()).all()
+                collections = base_query.order_by(Collection.created_at.desc()).all()
         else:
-            # Fallback for older schema without is_pinned/sort_order
             if sort == "name":
-                collections = db.query(Collection).order_by(Collection.name.asc()).all()
+                collections = base_query.order_by(Collection.name.asc()).all()
             else:
-                collections = db.query(Collection).order_by(Collection.created_at.desc()).all()
-                
+                collections = base_query.order_by(Collection.created_at.desc()).all()
+
         result = []
         for collection in collections:
-            item_count = CollectionService.get_collection_content_count(db, collection.id)
+            item_count = CollectionService.get_collection_content_count(db, collection.id, owner_id)
             
             if not include_empty and item_count == 0:
                 continue
             
-            preview_images = CollectionService.get_collection_preview_images(db, collection.id)
+            preview_images = CollectionService.get_collection_preview_images(db, collection.id, owner_id=owner_id)
             
             # Handle missing columns gracefully
             try:
@@ -170,7 +178,7 @@ class CollectionService:
         return result
     
     @staticmethod
-    def reorder_collections(db: Session, ordered_ids: List[UUID]) -> int:
+    def reorder_collections(db: Session, owner_id: str, ordered_ids: List[UUID]) -> int:
         """Reorder collections based on provided order."""
         # Check if sort_order column exists
         try:
@@ -185,7 +193,7 @@ class CollectionService:
         
         updated_count = 0
         for index, collection_id in enumerate(ordered_ids):
-            collection = db.query(Collection).filter(Collection.id == collection_id).first()
+            collection = db.query(Collection).filter(Collection.id == collection_id, Collection.user_id == owner_id).first()
             if collection:
                 collection.sort_order = index
                 updated_count += 1
@@ -197,6 +205,7 @@ class CollectionService:
     @staticmethod
     def update_collection(
         db: Session,
+        owner_id: str,
         collection_id: UUID,
         name: Optional[str] = None,
         description: Optional[str] = None,
@@ -206,7 +215,7 @@ class CollectionService:
         sort_order: Optional[int] = None
     ) -> Optional[Collection]:
         """Update a collection."""
-        collection = db.query(Collection).filter(Collection.id == collection_id).first()
+        collection = db.query(Collection).filter(Collection.id == collection_id, Collection.user_id == owner_id).first()
         if not collection:
             return None
         
@@ -235,9 +244,9 @@ class CollectionService:
         return collection
     
     @staticmethod
-    def delete_collection(db: Session, collection_id: UUID) -> bool:
+    def delete_collection(db: Session, owner_id: str, collection_id: UUID) -> bool:
         """Delete a collection. Does NOT delete the content items."""
-        collection = db.query(Collection).filter(Collection.id == collection_id).first()
+        collection = db.query(Collection).filter(Collection.id == collection_id, Collection.user_id == owner_id).first()
         if not collection:
             return False
         
@@ -250,20 +259,21 @@ class CollectionService:
     @staticmethod
     def add_content_to_collection(
         db: Session,
+        owner_id: str,
         collection_id: UUID,
         content_id: UUID
     ) -> Optional[ContentCollection]:
         """Add content to a collection."""
-        # Check if collection exists
-        collection = db.query(Collection).filter(Collection.id == collection_id).first()
+        # Check if collection exists and belongs to owner
+        collection = db.query(Collection).filter(Collection.id == collection_id, Collection.user_id == owner_id).first()
         if not collection:
-            logger.warning(f"Collection {collection_id} not found")
+            logger.warning(f"Collection {collection_id} not found or not owned by user")
             return None
         
-        # Check if content exists
-        content = db.query(Content).filter(Content.id == content_id).first()
+        # Check if content exists and belongs to owner
+        content = db.query(Content).filter(Content.id == content_id, Content.user_id == owner_id).first()
         if not content:
-            logger.warning(f"Content {content_id} not found")
+            logger.warning(f"Content {content_id} not found or not owned by user")
             return None
         
         # Check if already in collection
@@ -296,14 +306,15 @@ class CollectionService:
     @staticmethod
     def add_content_to_collection_bulk(
         db: Session,
+        owner_id: str,
         collection_id: UUID,
         content_ids: List[UUID]
     ) -> Dict[str, int]:
         """Add multiple content items to a collection."""
-        # Check if collection exists
-        collection = db.query(Collection).filter(Collection.id == collection_id).first()
+        # Check if collection exists and belongs to owner
+        collection = db.query(Collection).filter(Collection.id == collection_id, Collection.user_id == owner_id).first()
         if not collection:
-            logger.warning(f"Collection {collection_id} not found")
+            logger.warning(f"Collection {collection_id} not found or not owned by user")
             return {"added_count": 0, "already_present": 0}
         
         added_count = 0
@@ -311,7 +322,7 @@ class CollectionService:
         
         for content_id in content_ids:
             # Check if content exists
-            content = db.query(Content).filter(Content.id == content_id).first()
+            content = db.query(Content).filter(Content.id == content_id, Content.user_id == owner_id).first()
             if not content:
                 continue
             
@@ -345,10 +356,14 @@ class CollectionService:
     @staticmethod
     def remove_content_from_collection(
         db: Session,
+        owner_id: str,
         collection_id: UUID,
         content_id: UUID
     ) -> bool:
         """Remove content from a collection."""
+        collection = db.query(Collection).filter(Collection.id == collection_id, Collection.user_id == owner_id).first()
+        if not collection:
+            return False
         content_collection = db.query(ContentCollection).filter(
             ContentCollection.collection_id == collection_id,
             ContentCollection.content_id == content_id
@@ -366,13 +381,14 @@ class CollectionService:
     @staticmethod
     def get_content_in_collection(
         db: Session,
+        owner_id: str,
         collection_id: UUID,
         limit: int = 100,
         offset: int = 0,
         sort: str = "newest"
     ) -> List[Content]:
         """Get all content in a collection with pagination."""
-        collection = db.query(Collection).filter(Collection.id == collection_id).first()
+        collection = db.query(Collection).filter(Collection.id == collection_id, Collection.user_id == owner_id).first()
         if not collection:
             return []
         
@@ -392,7 +408,7 @@ class CollectionService:
             return []
         
         content_ids = [cc.content_id for cc in content_collections]
-        content = db.query(Content).filter(Content.id.in_(content_ids)).all()
+        content = db.query(Content).filter(Content.id.in_(content_ids), Content.user_id == owner_id).all()
         
         # Preserve order
         content_map = {c.id: c for c in content}
@@ -403,9 +419,14 @@ class CollectionService:
     @staticmethod
     def get_collections_for_content(
         db: Session,
+        owner_id: str,
         content_id: UUID
     ) -> List[Collection]:
         """Get all collections that contain specific content."""
+        content = db.query(Content).filter(Content.id == content_id, Content.user_id == owner_id).first()
+        if not content:
+            return []
+
         content_collections = db.query(ContentCollection).filter(
             ContentCollection.content_id == content_id
         ).all()
@@ -415,8 +436,58 @@ class CollectionService:
         if not collection_ids:
             return []
         
-        collections = db.query(Collection).filter(Collection.id.in_(collection_ids)).all()
+        collections = db.query(Collection).filter(Collection.id.in_(collection_ids), Collection.user_id == owner_id).all()
         return collections
+
+
+    @staticmethod
+    def get_uncollected_content(
+        db: Session,
+        owner_id: str,
+        limit: int = 100,
+        offset: int = 0,
+        sort: str = "newest"
+    ) -> List[Content]:
+        """Get content not assigned to any collection."""
+        from app.models.content import Content
+        
+        # Subquery for all content IDs in any collection
+        subquery = db.query(ContentCollection.content_id)
+        
+        query = db.query(Content).filter(
+            Content.user_id == owner_id,
+            ~Content.id.in_(subquery)
+        )
+        
+        if sort == "newest":
+            query = query.order_by(Content.created_at.desc())
+        elif sort == "oldest":
+            query = query.order_by(Content.created_at.asc())
+        elif sort == "last_opened":
+            query = query.order_by(Content.last_opened_at.desc().nullslast())
+        elif sort == "reading_time_asc":
+            query = query.order_by(Content.word_count.asc())
+        elif sort == "reading_time_desc":
+            query = query.order_by(Content.word_count.desc())
+        elif sort == "alpha_asc":
+            query = query.order_by(Content.title.asc())
+        elif sort == "alpha_desc":
+            query = query.order_by(Content.title.desc())
+        elif sort == "date_read":
+            query = query.order_by(Content.read_at.desc().nullslast())
+            
+        return query.offset(offset).limit(limit).all()
+
+    @staticmethod
+    def get_uncollected_content_count(db: Session, owner_id: str) -> int:
+        """Get the count of content not assigned to any collection."""
+        from app.models.content import Content
+        subquery = db.query(ContentCollection.content_id)
+        count = db.query(func.count(Content.id)).filter(
+            Content.user_id == owner_id,
+            ~Content.id.in_(subquery)
+        ).scalar()
+        return count or 0
 
 
 # Singleton instance
